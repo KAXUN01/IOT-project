@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Mininet-style Topology for SecureIoT-SDN Testing
+Mininet-style Topology for IoT Security Framework Testing
 Creates a virtual network topology to test SDN functionality
 """
 
@@ -275,14 +275,14 @@ def create_test_topology():
     return topology
 
 def main():
-    print("🌐 SecureIoT-SDN Mininet-style SDN Test")
-    print("=" * 40)
+    print("🌐 IoT Security Framework Mininet-style SDN Test")
+    print("=" * 50)
     
     # Check controller
     try:
         response = requests.get("http://localhost:5000")
         if response.status_code != 200:
-            print("❌ SecureIoT-SDN Controller not running")
+            print("❌ IoT Security Controller not running")
             print("Start with: python controller.py")
             return
     except:

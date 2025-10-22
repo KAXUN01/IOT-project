@@ -1,5 +1,5 @@
 """
-SecureIoT-SDN Controller
+IoT Security Framework Controller
 Advanced IoT Security Framework with Software-Defined Networking
 """
 

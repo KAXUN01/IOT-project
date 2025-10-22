@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-SDN Test Script for SecureIoT-SDN Framework
+SDN Test Script for IoT Security Framework
 Simulates IoT devices to test SDN functionality
 """
 
@@ -215,19 +215,19 @@ class SDNTester:
         print("🌐 Check the dashboard at: http://localhost:5000")
 
 def main():
-    print("🔐 SecureIoT-SDN Framework Test Suite")
+    print("🔐 IoT Security Framework Test Suite")
     print("=" * 40)
     
     # Check if controller is running
     try:
         response = requests.get("http://localhost:5000")
         if response.status_code == 200:
-            print("✅ SecureIoT-SDN Controller is running")
+            print("✅ IoT Security Controller is running")
         else:
-            print("❌ SecureIoT-SDN Controller is not responding")
+            print("❌ IoT Security Controller is not responding")
             return
     except:
-        print("❌ Cannot connect to SecureIoT-SDN Controller")
+        print("❌ Cannot connect to IoT Security Controller")
         print("Please start the controller first: python controller.py")
         return
     

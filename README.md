@@ -4,8 +4,8 @@
 [![Flask](https://img.shields.io/badge/Flask-2.0+-green.svg)](https://flask.palletsprojects.com/)
 [![ESP32](https://img.shields.io/badge/ESP32-Compatible-red.svg)](https://www.espressif.com/en/products/socs/esp32)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![IoT](https://img.shields.io/badge/IoT-Security-orange.svg)](https://github.com/cdrditgis/SecureIoT-SDN)
-[![SDN](https://img.shields.io/badge/SDN-Enabled-blueviolet.svg)](https://github.com/cdrditgis/SecureIoT-SDN)
+[![IoT](https://img.shields.io/badge/IoT-Security-orange.svg)](https://github.com/KAXUN01/IOT-project)
+[![SDN](https://img.shields.io/badge/SDN-Enabled-blueviolet.svg)](https://github.com/KAXUN01/IOT-project)
 
 ## 📖 Overview
 
@@ -116,8 +116,8 @@ graph TB
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/cdrditgis/SecureIoT-SDN.git
-   cd SecureIoT-SDN
+   git clone https://github.com/KAXUN01/IOT-project.git
+   cd IOT-project
    ```
 
 2. **Install Python dependencies**
@@ -248,7 +248,7 @@ http://<controller-ip>:5000
 ## 📁 Repository Structure
 
 ```
-SecureIoT-SDN/
+IOT-project/
 │
 ├── 📄 controller.py              # Flask-based SDN controller
 │   ├── Token management & validation
@@ -316,7 +316,7 @@ Contributions are welcome! Here's how you can help improve SecureIoT-SDN:
 
 ### Reporting Issues
 
-Found a bug or have a suggestion? Please [open an issue](https://github.com/cdrditgis/SecureIoT-SDN/issues) with:
+Found a bug or have a suggestion? Please [open an issue](https://github.com/KAXUN01/IOT-project/issues) with:
 - Clear description of the problem/suggestion
 - Steps to reproduce (for bugs)
 - Expected vs actual behavior
