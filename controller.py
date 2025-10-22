@@ -13,6 +13,8 @@ import time
 import uuid
 from datetime import datetime
 import random
+import threading
+from ml_security_engine import initialize_ml_engine, get_ml_engine
 
 app = Flask(__name__)
 
@@ -52,6 +54,10 @@ sdn_metrics = {
     "data_plane_throughput": 0,  # Mbps
     "policy_enforcement_rate": 0  # %
 }
+
+# Initialize ML Security Engine
+ml_engine = None
+ml_monitoring_active = False
 
 def is_maintenance_window():
     current_hour = datetime.now().hour
@@ -106,6 +112,15 @@ def auth():
         return json.dumps({'device_id': device_id, 'authorized': False})
 
     device_tokens[device_id]["last_activity"] = current_time
+
+    # Start per-device ML monitoring on first successful auth in this session
+    global ml_engine, ml_monitoring_active
+    if ml_engine is None:
+        ml_engine = initialize_ml_engine()
+    if ml_engine and ml_engine.is_loaded and not ml_monitoring_active:
+        # Begin background monitoring
+        ml_engine.start_monitoring()
+        ml_monitoring_active = True
     return json.dumps({'device_id': device_id, 'authorized': True})
 
 @app.route('/data', methods=['POST'])
@@ -145,6 +160,32 @@ def data():
     device_data[device_id].append(1)
     if len(timestamps) == 0 or current_time - timestamps[-1] > 1:
         timestamps.append(current_time)
+    # Feed packet to ML engine for anomaly detection with device context
+    global ml_engine
+    try:
+        if ml_engine and ml_engine.is_loaded:
+            ml_engine.predict_attack({
+                'device_id': device_id,
+                'size': data.get('size', 0),
+                'protocol': data.get('protocol', 6),
+                'src_port': data.get('src_port', 0),
+                'dst_port': data.get('dst_port', 0),
+                'rate': data.get('rate', 0.0),
+                'duration': data.get('duration', 0.0),
+                'bps': data.get('bps', 0.0),
+                'pps': data.get('pps', 0.0),
+                'tcp_flags': data.get('tcp_flags', 0),
+                'window_size': data.get('window_size', 0),
+                'ttl': data.get('ttl', 64),
+                'fragment_offset': data.get('fragment_offset', 0),
+                'ip_length': data.get('ip_length', 0),
+                'tcp_length': data.get('tcp_length', 0),
+                'udp_length': data.get('udp_length', 0)
+            })
+    except Exception as e:
+        # Non-fatal for data ingestion; continue normally
+        pass
+
     return json.dumps({'status': 'accepted'})
 
 def generate_graph():
@@ -277,6 +318,70 @@ def get_policy_logs():
 def get_sdn_metrics():
     update_sdn_metrics()
     return json.dumps(sdn_metrics)
+
+# ML Security Engine Endpoints
+@app.route('/ml/initialize')
+def initialize_ml():
+    """Initialize the ML security engine"""
+    global ml_engine, ml_monitoring_active
+    try:
+        ml_engine = initialize_ml_engine()
+        if ml_engine and ml_engine.is_loaded:
+            ml_monitoring_active = True
+            ml_engine.start_monitoring()
+            return json.dumps({'status': 'success', 'message': 'ML engine initialized and monitoring started'})
+        else:
+            return json.dumps({'status': 'error', 'message': 'Failed to initialize ML engine'})
+    except Exception as e:
+        return json.dumps({'status': 'error', 'message': f'ML initialization failed: {str(e)}'})
+
+@app.route('/ml/status')
+def ml_status():
+    """Get ML engine status"""
+    global ml_engine, ml_monitoring_active
+    if ml_engine and ml_engine.is_loaded:
+        stats = ml_engine.get_attack_statistics()
+        return json.dumps({
+            'status': 'active',
+            'monitoring': ml_monitoring_active,
+            'statistics': stats
+        })
+    else:
+        return json.dumps({'status': 'inactive', 'monitoring': False})
+
+@app.route('/ml/detections')
+def ml_detections():
+    """Get recent attack detections"""
+    global ml_engine
+    if ml_engine and ml_engine.is_loaded:
+        detections = ml_engine.get_recent_detections(20)
+        return json.dumps(detections)
+    else:
+        return json.dumps([])
+
+@app.route('/ml/analyze_packet', methods=['POST'])
+def analyze_packet():
+    """Analyze a specific packet for attacks"""
+    global ml_engine
+    if not ml_engine or not ml_engine.is_loaded:
+        return json.dumps({'error': 'ML engine not initialized'})
+    
+    try:
+        packet_data = request.json
+        result = ml_engine.predict_attack(packet_data)
+        return json.dumps(result)
+    except Exception as e:
+        return json.dumps({'error': f'Analysis failed: {str(e)}'})
+
+@app.route('/ml/statistics')
+def ml_statistics():
+    """Get comprehensive ML statistics"""
+    global ml_engine
+    if ml_engine and ml_engine.is_loaded:
+        stats = ml_engine.get_attack_statistics()
+        return json.dumps(stats)
+    else:
+        return json.dumps({'error': 'ML engine not available'})
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)

@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>SDN IoT Advanced Dashboard</title>
+    <title>IoT Security Framework - ML-Powered Dashboard</title>
     <style>
         body {
             margin: 0;
@@ -136,6 +136,39 @@
             margin: 5px 0;
             font-size: 14px;
         }
+        .ml-section {
+            background: linear-gradient(135deg, #2d1b69 0%, #11998e 100%);
+            border: 2px solid #00d4ff;
+        }
+        .ml-metric {
+            display: inline-block;
+            margin: 10px;
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            text-align: center;
+            min-width: 120px;
+        }
+        .ml-metric-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #00d4ff;
+        }
+        .ml-metric-label {
+            font-size: 12px;
+            color: #ccc;
+            margin-top: 5px;
+        }
+        .attack-alert {
+            background: linear-gradient(45deg, #ff6b6b, #ee5a24);
+            border: 2px solid #ff3838;
+            animation: alertPulse 2s infinite;
+        }
+        @keyframes alertPulse {
+            0% { box-shadow: 0 0 0 0 rgba(255, 56, 56, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(255, 56, 56, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(255, 56, 56, 0); }
+        }
     </style>
     <script src="static\vis-network.min.js"></script>
 </head>
@@ -237,6 +270,34 @@
         <div class="section">
             <h2>SDN Metrics</h2>
             <div class="sdn-metrics" id="sdn-metrics"></div>
+        </div>
+
+        <!-- ML Security Engine Section -->
+        <div class="section ml-section">
+            <h2>🤖 ML Security Engine - DDoS Attack Detection</h2>
+            <div style="margin-bottom: 20px;">
+                <button onclick="initializeML()" style="background: linear-gradient(45deg, #00d4ff, #007bff); color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; margin-right: 10px;">
+                    Initialize ML Engine
+                </button>
+                <button onclick="toggleMLMonitoring()" style="background: linear-gradient(45deg, #28a745, #20c997); color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer;">
+                    Toggle Monitoring
+                </button>
+            </div>
+            
+            <div id="ml-status" style="margin-bottom: 20px;">
+                <p>ML Engine Status: <span id="ml-status-text">Not Initialized</span></p>
+            </div>
+            
+            <div id="ml-metrics" style="display: flex; flex-wrap: wrap; justify-content: center;">
+                <!-- ML metrics will be populated here -->
+            </div>
+            
+            <div style="margin-top: 20px;">
+                <h3>Recent Attack Detections</h3>
+                <div id="ml-detections" style="max-height: 200px; overflow-y: auto; background: rgba(0, 0, 0, 0.3); padding: 10px; border-radius: 5px;">
+                    <!-- Attack detections will be populated here -->
+                </div>
+            </div>
         </div>
     </div>
 
@@ -388,12 +449,127 @@
                 .catch(error => console.error('Error fetching SDN metrics:', error));
         }
 
+        // ML Security Engine Functions
+        let mlEngineActive = false;
+        
+        function initializeML() {
+            fetch('/ml/initialize')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        document.getElementById('ml-status-text').textContent = 'Active';
+                        document.getElementById('ml-status-text').style.color = '#00ff00';
+                        mlEngineActive = true;
+                        updateMLMetrics();
+                        updateMLDetections();
+                    } else {
+                        alert('Failed to initialize ML engine: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error initializing ML:', error);
+                    alert('Error initializing ML engine');
+                });
+        }
+        
+        function toggleMLMonitoring() {
+            if (mlEngineActive) {
+                mlEngineActive = false;
+                document.getElementById('ml-status-text').textContent = 'Monitoring Stopped';
+                document.getElementById('ml-status-text').style.color = '#ffaa00';
+            } else {
+                mlEngineActive = true;
+                document.getElementById('ml-status-text').textContent = 'Monitoring Active';
+                document.getElementById('ml-status-text').style.color = '#00ff00';
+            }
+        }
+        
+        function updateMLMetrics() {
+            if (!mlEngineActive) return;
+            
+            fetch('/ml/statistics')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        console.error('ML statistics error:', data.error);
+                        return;
+                    }
+                    
+                    const container = document.getElementById('ml-metrics');
+                    container.innerHTML = '';
+                    
+                    // Create metric cards
+                    const metrics = [
+                        { label: 'Total Packets', value: data.total_packets || 0 },
+                        { label: 'Attack Packets', value: data.attack_packets || 0 },
+                        { label: 'Normal Packets', value: data.normal_packets || 0 },
+                        { label: 'Attack Rate', value: (data.attack_rate || 0).toFixed(2) + '%' },
+                        { label: 'Detection Accuracy', value: (data.detection_accuracy || 0).toFixed(2) + '%' },
+                        { label: 'Recent Attacks', value: data.recent_attacks || 0 }
+                    ];
+                    
+                    metrics.forEach(metric => {
+                        const card = document.createElement('div');
+                        card.className = 'ml-metric';
+                        card.innerHTML = `
+                            <div class="ml-metric-value">${metric.value}</div>
+                            <div class="ml-metric-label">${metric.label}</div>
+                        `;
+                        container.appendChild(card);
+                    });
+                })
+                .catch(error => console.error('Error fetching ML metrics:', error));
+        }
+        
+        function updateMLDetections() {
+            if (!mlEngineActive) return;
+            
+            fetch('/ml/detections')
+                .then(response => response.json())
+                .then(detections => {
+                    const container = document.getElementById('ml-detections');
+                    container.innerHTML = '';
+                    
+                    if (detections.length === 0) {
+                        container.innerHTML = '<p>No recent detections</p>';
+                        return;
+                    }
+                    
+                    detections.slice(-10).reverse().forEach(detection => {
+                        const div = document.createElement('div');
+                        div.style.marginBottom = '10px';
+                        div.style.padding = '8px';
+                        div.style.borderRadius = '5px';
+                        div.style.background = detection.is_attack ? 
+                            'linear-gradient(45deg, #ff6b6b, #ee5a24)' : 
+                            'rgba(0, 255, 0, 0.2)';
+                        div.style.border = detection.is_attack ? '2px solid #ff3838' : '1px solid #00ff00';
+                        
+                        const timestamp = new Date(detection.timestamp).toLocaleTimeString();
+                        const confidence = (detection.confidence * 100).toFixed(2);
+                        
+                        div.innerHTML = `
+                            <strong>${detection.attack_type}</strong> 
+                            (${confidence}% confidence) - ${timestamp}
+                            ${detection.is_attack ? ' 🚨' : ' ✅'}
+                        `;
+                        
+                        container.appendChild(div);
+                    });
+                })
+                .catch(error => console.error('Error fetching ML detections:', error));
+        }
+
         setInterval(() => {
             updatePacketCounts();
             updateTopology();
             updateHealthMetrics();
             updatePolicyLogs();
             updateSDNMetrics();
+            if (mlEngineActive) {
+                updateMLMetrics();
+                updateMLDetections();
+            }
         }, 5000);
 
         updatePacketCounts();
