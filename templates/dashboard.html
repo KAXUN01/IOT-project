@@ -423,6 +423,461 @@
             font-weight: 500;
         }
 
+        .policy-info {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        .policy-name {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .policy-description {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        .policy-controls {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .status-indicator {
+            padding: 0.25rem 0.75rem;
+            border-radius: 1rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            background: rgba(211, 47, 47, 0.1);
+            color: #f44336;
+            border: 1px solid rgba(244, 67, 54, 0.2);
+        }
+
+        .status-indicator.active {
+            background: rgba(46, 125, 50, 0.1);
+            color: #4caf50;
+            border: 1px solid rgba(76, 175, 80, 0.2);
+        }
+
+        .status-dot {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #666;
+            margin-right: 0.5rem;
+        }
+
+        .status-dot.active {
+            background: #4caf50;
+            box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.2);
+        }
+
+        .status-dot.error {
+            background: #f44336;
+            box-shadow: 0 0 0 2px rgba(244, 67, 54, 0.2);
+        }
+
+        .status-text {
+            font-weight: 500;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+
+        .metric-item {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        .metric-item .metric-label {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        .metric-item .metric-value {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: var(--accent-color);
+        }
+
+        .loading-indicator {
+            text-align: center;
+            padding: 2rem;
+            color: var(--text-secondary);
+            font-style: italic;
+        }
+
+        .alert-details {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+            margin-top: 0.5rem;
+        }
+
+        .confidence {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        .details {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        /* ML Engine Specific Styles */
+        .ml-status-container {
+            padding: 1rem 0;
+        }
+
+        .ml-status-main {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .status-indicator-large {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .status-dot-large {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #666;
+            box-shadow: 0 0 0 3px rgba(102, 102, 102, 0.2);
+            transition: all var(--transition-normal);
+        }
+
+        .status-dot-large.active {
+            background: #4caf50;
+            box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.3);
+            animation: pulse 2s infinite;
+        }
+
+        .status-dot-large.error {
+            background: #f44336;
+            box-shadow: 0 0 0 3px rgba(244, 67, 54, 0.3);
+        }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.3); }
+            50% { box-shadow: 0 0 0 8px rgba(76, 175, 80, 0.1); }
+            100% { box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.3); }
+        }
+
+        .status-info {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        .status-text-large {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .status-subtitle {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        .ml-controls {
+            display: flex;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1rem;
+        }
+
+        .stat-item {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 1rem;
+            background: var(--secondary-bg);
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            transition: all var(--transition-normal);
+        }
+
+        .stat-item:hover {
+            border-color: var(--accent-color);
+            transform: translateY(-2px);
+        }
+
+        .stat-icon {
+            font-size: 1.5rem;
+            opacity: 0.8;
+        }
+
+        .stat-content {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: var(--accent-color);
+            font-feature-settings: "tnum";
+        }
+
+        .stat-label {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        .metrics-container {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .metric-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .metric-row:last-child {
+            border-bottom: none;
+        }
+
+        .metric-row .metric-label {
+            font-weight: 500;
+            color: var(--text-secondary);
+        }
+
+        .metric-row .metric-value {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .detection-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .detection-filters {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .filter-btn {
+            padding: 0.5rem 1rem;
+            border-radius: 1rem;
+            background: var(--secondary-bg);
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+            cursor: pointer;
+            transition: all var(--transition-normal);
+        }
+
+        .filter-btn:hover {
+            border-color: var(--accent-color);
+            color: var(--text-primary);
+        }
+
+        .filter-btn.active {
+            background: var(--accent-color);
+            color: var(--text-primary);
+            border-color: var(--accent-color);
+        }
+
+        .detection-stats {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        .detection-count {
+            font-weight: 500;
+        }
+
+        .detections-container {
+            max-height: 500px;
+            overflow-y: auto;
+            scrollbar-width: thin;
+            scrollbar-color: var(--accent-color) var(--secondary-bg);
+        }
+
+        .detections-container::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .detections-container::-webkit-scrollbar-track {
+            background: var(--secondary-bg);
+            border-radius: 3px;
+        }
+
+        .detections-container::-webkit-scrollbar-thumb {
+            background: var(--accent-color);
+            border-radius: 3px;
+        }
+
+        .detection-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 1rem;
+            padding: 1rem;
+            margin-bottom: 0.75rem;
+            background: var(--secondary-bg);
+            border-radius: 8px;
+            border-left: 4px solid transparent;
+            transition: all var(--transition-normal);
+        }
+
+        .detection-item:hover {
+            transform: translateX(4px);
+            box-shadow: var(--shadow-md);
+        }
+
+        .detection-item.attack {
+            border-left-color: #f44336;
+            background: rgba(244, 67, 54, 0.05);
+        }
+
+        .detection-item.normal {
+            border-left-color: #4caf50;
+            background: rgba(76, 175, 80, 0.05);
+        }
+
+        .detection-icon {
+            font-size: 1.25rem;
+            margin-top: 0.25rem;
+        }
+
+        .detection-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .detection-header-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+
+        .detection-type {
+            font-weight: 600;
+            font-size: 1rem;
+        }
+
+        .detection-timestamp {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        .detection-details {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        .detection-confidence {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .confidence-bar {
+            width: 100px;
+            height: 4px;
+            background: var(--secondary-bg);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .confidence-fill {
+            height: 100%;
+            background: var(--accent-color);
+            transition: width 0.3s ease;
+        }
+
+        .detection-device {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        .loading-spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid var(--border-color);
+            border-top: 2px solid var(--accent-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 0.5rem;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .loading-indicator {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+            color: var(--text-secondary);
+            font-style: italic;
+        }
+
+        @media (max-width: 768px) {
+            .ml-status-main {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .detection-header {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .detection-filters {
+                justify-content: center;
+            }
+        }
+
         .scroll-container {
             max-height: 400px;
             overflow-y: auto;
@@ -750,51 +1205,107 @@
 
         <!-- ML Engine Tab -->
         <section id="ml-engine" class="tab-content">
-            <div class="grid-container">
-                <div class="card">
-                    <h3>ML Engine Status</h3>
-                    <div id="ml-status" class="metric-value">
-                        <div class="status-indicator">
-                            <span class="status-dot"></span>
-                            <span class="status-text">Initializing...</span>
+            <!-- ML Engine Status Card -->
+            <div class="card">
+                <h3>🤖 ML Security Engine</h3>
+                <div class="ml-status-container">
+                    <div class="ml-status-main">
+                        <div class="status-indicator-large">
+                            <span class="status-dot-large" id="ml-status-dot"></span>
+                            <div class="status-info">
+                                <span class="status-text-large" id="ml-status-text">Initializing...</span>
+                                <span class="status-subtitle" id="ml-status-subtitle">Loading ML model and starting monitoring</span>
+                            </div>
                         </div>
-                    </div>
-                    <div class="button-group" style="margin-top: 1rem;">
-                        <button class="button button-primary" onclick="initializeML()">
-                            <span class="button-icon">🔄</span>Initialize ML Engine
-                        </button>
-                        <button class="button button-primary" id="ml-monitoring-toggle" onclick="toggleMLMonitoring()">
-                            <span class="button-icon">⏸️</span>Pause Monitoring
-                        </button>
-                    </div>
-                </div>
-                <div class="card">
-                    <h3>Detection Statistics</h3>
-                    <div id="ml-metrics" class="metrics-grid">
-                        <div class="metric-item">
-                            <span class="metric-label">Detection Rate</span>
-                            <span class="metric-value">--</span>
-                        </div>
-                        <div class="metric-item">
-                            <span class="metric-label">False Positive Rate</span>
-                            <span class="metric-value">--</span>
-                        </div>
-                        <div class="metric-item">
-                            <span class="metric-label">Model Confidence</span>
-                            <span class="metric-value">--</span>
-                        </div>
-                        <div class="metric-item">
-                            <span class="metric-label">Processing Rate</span>
-                            <span class="metric-value">--</span>
+                        <div class="ml-controls">
+                            <button class="button button-primary" onclick="initializeML()" id="ml-init-btn">
+                                <span class="button-icon">🔄</span>Initialize ML Engine
+                            </button>
+                            <button class="button button-primary" id="ml-monitoring-toggle" onclick="toggleMLMonitoring()">
+                                <span class="button-icon">⏸️</span>Pause Monitoring
+                            </button>
                         </div>
                     </div>
                 </div>
             </div>
-            
+
+            <!-- Statistics Grid -->
+            <div class="grid-container">
+                <div class="card">
+                    <h3>📊 Network Statistics</h3>
+                    <div class="stats-grid">
+                        <div class="stat-item">
+                            <div class="stat-icon">📦</div>
+                            <div class="stat-content">
+                                <div class="stat-value" id="total-packets">0</div>
+                                <div class="stat-label">Total Packets</div>
+                            </div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-icon">⚠️</div>
+                            <div class="stat-content">
+                                <div class="stat-value" id="attack-packets">0</div>
+                                <div class="stat-label">Attack Packets</div>
+                            </div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-icon">📈</div>
+                            <div class="stat-content">
+                                <div class="stat-value" id="attack-rate">0%</div>
+                                <div class="stat-label">Attack Rate</div>
+                            </div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-icon">🎯</div>
+                            <div class="stat-content">
+                                <div class="stat-value" id="model-confidence">0%</div>
+                                <div class="stat-label">Model Confidence</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3>⏱️ System Metrics</h3>
+                    <div class="metrics-container">
+                        <div class="metric-row">
+                            <span class="metric-label">Uptime:</span>
+                            <span class="metric-value" id="ml-uptime">0m</span>
+                        </div>
+                        <div class="metric-row">
+                            <span class="metric-label">Model Status:</span>
+                            <span class="metric-value" id="model-status">Loading...</span>
+                        </div>
+                        <div class="metric-row">
+                            <span class="metric-label">Last Health Check:</span>
+                            <span class="metric-value" id="last-health-check">--</span>
+                        </div>
+                        <div class="metric-row">
+                            <span class="metric-label">Detection Accuracy:</span>
+                            <span class="metric-value" id="detection-accuracy">--</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Attack Detection Section -->
             <div class="card">
-                <h3>Real-time Attack Detection</h3>
-                <div id="ml-detections" class="scroll-container">
-                    <div class="loading-indicator">Loading detection data...</div>
+                <h3>🚨 Real-time Attack Detection</h3>
+                <div class="detection-header">
+                    <div class="detection-filters">
+                        <button class="filter-btn active" data-filter="all">All</button>
+                        <button class="filter-btn" data-filter="attacks">Attacks Only</button>
+                        <button class="filter-btn" data-filter="normal">Normal Traffic</button>
+                    </div>
+                    <div class="detection-stats">
+                        <span class="detection-count">Recent Detections: <span id="detection-count">0</span></span>
+                    </div>
+                </div>
+                <div id="ml-detections" class="detections-container">
+                    <div class="loading-indicator">
+                        <div class="loading-spinner"></div>
+                        <span>Loading detection data...</span>
+                    </div>
                 </div>
             </div>
         </section>
@@ -1140,91 +1651,112 @@
 
         // ML Engine Functions
         let mlMonitoringActive = true;
+        let currentFilter = 'all';
         
         function initializeML() {
-            const statusDot = document.querySelector('.status-dot');
-            const statusText = document.querySelector('.status-text');
-            statusDot.className = 'status-dot';
+            const statusDot = document.getElementById('ml-status-dot');
+            const statusText = document.getElementById('ml-status-text');
+            const statusSubtitle = document.getElementById('ml-status-subtitle');
+            
+            statusDot.className = 'status-dot-large';
             statusText.textContent = 'Initializing...';
+            statusSubtitle.textContent = 'Loading ML model and starting monitoring';
 
             fetch('/ml/initialize')
                 .then(response => response.json())
                 .then(data => {
                     if (data.status === 'success') {
                         showAlert('ML Engine initialized successfully', 'success');
-                        statusDot.className = 'status-dot active';
+                        statusDot.className = 'status-dot-large active';
                         statusText.textContent = 'Active - Monitoring';
+                        statusSubtitle.textContent = 'ML model loaded and monitoring network traffic';
                         mlMonitoringActive = true;
                         updateMLMetrics();
-                        // Start periodic updates
                         startMLUpdates();
                     } else {
                         showAlert('Failed to initialize ML Engine', 'danger');
-                        statusDot.className = 'status-dot error';
+                        statusDot.className = 'status-dot-large error';
                         statusText.textContent = 'Initialization Failed';
+                        statusSubtitle.textContent = 'Check logs for error details';
                     }
                 })
                 .catch(error => {
                     console.error('Error initializing ML engine:', error);
                     showAlert('Failed to initialize ML Engine', 'danger');
-                    statusDot.className = 'status-dot error';
+                    statusDot.className = 'status-dot-large error';
                     statusText.textContent = 'Connection Error';
+                    statusSubtitle.textContent = 'Unable to connect to ML engine';
                 });
         }
 
         function updateMLMetrics() {
-            fetch('/ml/status')
+            fetch('/ml/status?t=' + Date.now()) // Cache busting
                 .then(response => response.json())
                 .then(data => {
-                    // Update status indicator
-                    const statusDot = document.querySelector('.status-dot');
-                    const statusText = document.querySelector('.status-text');
+                    console.log('ML Status Data:', data); // Debug log
                     
-                    if (data.status === 'active') {
-                        statusDot.className = 'status-dot active';
-                        statusText.textContent = 'Active - Monitoring';
-                    } else if (data.status === 'error') {
-                        statusDot.className = 'status-dot error';
-                        statusText.textContent = 'Error - Check Logs';
-                    } else {
-                        statusDot.className = 'status-dot';
-                        statusText.textContent = 'Initializing...';
+                    // Update status indicator
+                    const statusDot = document.getElementById('ml-status-dot');
+                    const statusText = document.getElementById('ml-status-text');
+                    const statusSubtitle = document.getElementById('ml-status-subtitle');
+                    
+                    if (statusDot && statusText && statusSubtitle) {
+                        if (data.status === 'active') {
+                            statusDot.className = 'status-dot-large active';
+                            statusText.textContent = 'Active - Monitoring';
+                            statusSubtitle.textContent = `Processing ${data.statistics?.total_packets || 0} packets`;
+                        } else if (data.status === 'error') {
+                            statusDot.className = 'status-dot-large error';
+                            statusText.textContent = 'Error - Check Logs';
+                            statusSubtitle.textContent = 'ML engine encountered an error';
+                        } else {
+                            statusDot.className = 'status-dot-large';
+                            statusText.textContent = 'Initializing...';
+                            statusSubtitle.textContent = 'Loading ML model and starting monitoring';
+                        }
                     }
 
-                    // Update metrics
-                    const metrics = document.getElementById('ml-metrics');
+                    // Update statistics
                     if (data.statistics) {
-                        metrics.innerHTML = `
-                            <div class="metric-item">
-                                <span class="metric-label">Detection Rate</span>
-                                <span class="metric-value">${data.statistics.detection_rate}%</span>
-                            </div>
-                            <div class="metric-item">
-                                <span class="metric-label">False Positive Rate</span>
-                                <span class="metric-value">${data.statistics.false_positive_rate}%</span>
-                            </div>
-                            <div class="metric-item">
-                                <span class="metric-label">Model Confidence</span>
-                                <span class="metric-value">${data.statistics.confidence}%</span>
-                            </div>
-                            <div class="metric-item">
-                                <span class="metric-label">Processing Rate</span>
-                                <span class="metric-value">${data.statistics.processing_rate}/sec</span>
-                            </div>
-                        `;
+                        const stats = data.statistics;
+                        console.log('Updating ML stats:', stats); // Debug log
+                        
+                        // Update main stats with null checks
+                        const totalPacketsEl = document.getElementById('total-packets');
+                        const attackPacketsEl = document.getElementById('attack-packets');
+                        const attackRateEl = document.getElementById('attack-rate');
+                        const modelConfidenceEl = document.getElementById('model-confidence');
+                        
+                        if (totalPacketsEl) totalPacketsEl.textContent = stats.total_packets || 0;
+                        if (attackPacketsEl) attackPacketsEl.textContent = stats.attack_packets || 0;
+                        if (attackRateEl) attackRateEl.textContent = `${(stats.attack_rate || 0).toFixed(1)}%`;
+                        if (modelConfidenceEl) modelConfidenceEl.textContent = `${(stats.detection_accuracy || 0).toFixed(1)}%`;
+                        
+                        // Update system metrics with null checks
+                        const mlUptimeEl = document.getElementById('ml-uptime');
+                        const modelStatusEl = document.getElementById('model-status');
+                        const lastHealthCheckEl = document.getElementById('last-health-check');
+                        const detectionAccuracyEl = document.getElementById('detection-accuracy');
+                        
+                        if (mlUptimeEl) mlUptimeEl.textContent = `${Math.floor((stats.uptime || 0) / 60)}m`;
+                        if (modelStatusEl) modelStatusEl.textContent = stats.model_status || 'Unknown';
+                        if (lastHealthCheckEl) lastHealthCheckEl.textContent = stats.last_health_check ? 
+                            new Date(stats.last_health_check).toLocaleTimeString() : '--';
+                        if (detectionAccuracyEl) detectionAccuracyEl.textContent = `${(stats.detection_accuracy || 0).toFixed(1)}%`;
                     }
                 })
                 .catch(error => {
                     console.error('Error fetching ML metrics:', error);
-                    const statusDot = document.querySelector('.status-dot');
-                    const statusText = document.querySelector('.status-text');
-                    statusDot.className = 'status-dot error';
-                    statusText.textContent = 'Connection Error';
+                    const statusDot = document.getElementById('ml-status-dot');
+                    const statusText = document.getElementById('ml-status-text');
+                    const statusSubtitle = document.getElementById('ml-status-subtitle');
+                    if (statusDot && statusText && statusSubtitle) {
+                        statusDot.className = 'status-dot-large error';
+                        statusText.textContent = 'Connection Error';
+                        statusSubtitle.textContent = 'Unable to fetch ML engine data';
+                    }
                 });
         }
-
-        let mlDetectionRetryCount = 0;
-        const MAX_ML_RETRIES = 3;
 
         function updateMLDetections(isRetry = false) {
             if (!isRetry) {
@@ -1244,7 +1776,7 @@
                 return response.json();
             })
             .then(data => {
-                mlDetectionRetryCount = 0; // Reset retry count on success
+                mlDetectionRetryCount = 0;
                 const container = document.getElementById('ml-detections');
 
                 if (!container) {
@@ -1252,37 +1784,79 @@
                     return;
                 }
 
-                // Support both legacy array responses and the new structured response
                 const detections = Array.isArray(data) ? data : (data && data.detections) ? data.detections : [];
+                
+                // Update detection count
+                document.getElementById('detection-count').textContent = detections.length;
 
                 if (!detections || detections.length === 0) {
-                    container.innerHTML = '<div class="alert success">No threats detected</div>';
-                } else {
-                    container.innerHTML = detections.map(detection => `
-                        <div class="alert ${detection.is_attack ? 'danger' : 'success'}">
-                            <div class="alert-header">
-                                <strong>${detection.attack_type || 'Normal Traffic'}</strong>
-                                <span class="alert-timestamp">${detection.timestamp ? new Date(detection.timestamp).toLocaleTimeString() : ''}</span>
-                            </div>
-                            <div class="alert-details">
-                                <span class="confidence">Confidence: ${(Number(detection.confidence) * 100).toFixed(2)}%</span>
-                                ${detection.details ? `<span class="details">${detection.details}</span>` : ''}
+                    container.innerHTML = `
+                        <div class="detection-item normal">
+                            <div class="detection-icon">✅</div>
+                            <div class="detection-content">
+                                <div class="detection-header-row">
+                                    <span class="detection-type">No Threats Detected</span>
+                                </div>
+                                <div class="detection-details">
+                                    <span>All network traffic appears normal</span>
+                                </div>
                             </div>
                         </div>
-                    `).join('');
-                }
-
-                // Update status indicators if exists — prefer stats from structured response
-                const statusDot = document.querySelector('.status-dot');
-                const statusText = document.querySelector('.status-text');
-                if (statusDot && statusText) {
-                    if (data && data.stats) {
-                        statusDot.className = 'status-dot active';
-                        statusText.textContent = `Active - ${data.stats.recent_attacks || 0} recent attacks`;
-                    } else {
-                        statusDot.className = 'status-dot active';
-                        statusText.textContent = 'Active - Monitoring';
+                    `;
+                } else {
+                    // Filter detections based on current filter
+                    let filteredDetections = detections;
+                    if (currentFilter === 'attacks') {
+                        filteredDetections = detections.filter(d => d.is_attack);
+                    } else if (currentFilter === 'normal') {
+                        filteredDetections = detections.filter(d => !d.is_attack);
                     }
+
+                    // Show last 15 detections in reverse order
+                    const recentDetections = filteredDetections.slice(-15).reverse();
+                    
+                    container.innerHTML = recentDetections.map(detection => {
+                        const isAttack = detection.is_attack;
+                        const icon = isAttack ? '🚨' : '✅';
+                        const type = detection.attack_type || 'Normal Traffic';
+                        const confidence = Number(detection.confidence) * 100;
+                        const timestamp = detection.timestamp ? new Date(detection.timestamp).toLocaleTimeString() : '';
+                        const device = detection.device_id || 'Unknown Device';
+                        
+                        return `
+                            <div class="detection-item ${isAttack ? 'attack' : 'normal'}">
+                                <div class="detection-icon">${icon}</div>
+                                <div class="detection-content">
+                                    <div class="detection-header-row">
+                                        <span class="detection-type">${type}</span>
+                                        <span class="detection-timestamp">${timestamp}</span>
+                                    </div>
+                                    <div class="detection-details">
+                                        <div class="detection-confidence">
+                                            <span>Confidence:</span>
+                                            <div class="confidence-bar">
+                                                <div class="confidence-fill" style="width: ${confidence}%"></div>
+                                            </div>
+                                            <span>${confidence.toFixed(1)}%</span>
+                                        </div>
+                                        <div class="detection-device">Device: ${device}</div>
+                                        ${isAttack ? `
+                                            <div class="attack-details">
+                                                <strong>⚠️ Attack Details:</strong>
+                                                <ul style="margin: 0.5rem 0; padding-left: 1rem;">
+                                                    <li>Attack Type: ${type}</li>
+                                                    <li>Confidence Level: ${confidence.toFixed(1)}%</li>
+                                                    <li>Source Device: ${device}</li>
+                                                    <li>Detection Time: ${timestamp}</li>
+                                                    <li>Status: <span style="color: #f44336;">THREAT DETECTED</span></li>
+                                                </ul>
+                                            </div>
+                                        ` : ''}
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
                 }
             })
             .catch(error => {
@@ -1290,40 +1864,37 @@
                 const container = document.getElementById('ml-detections');
                 if (!container) return;
 
-                // Handle retry logic
                 if (mlDetectionRetryCount < MAX_ML_RETRIES) {
                     mlDetectionRetryCount++;
                     console.log(`Retrying ML detection update (${mlDetectionRetryCount}/${MAX_ML_RETRIES})...`);
                     setTimeout(() => updateMLDetections(true), 2000 * mlDetectionRetryCount);
                     container.innerHTML = `
-                        <div class="alert warning">
-                            <div class="alert-header">
-                                <strong>Reconnecting to ML Engine...</strong>
-                            </div>
-                            <div class="alert-details">
-                                Retry ${mlDetectionRetryCount}/${MAX_ML_RETRIES}
+                        <div class="detection-item normal">
+                            <div class="detection-icon">🔄</div>
+                            <div class="detection-content">
+                                <div class="detection-header-row">
+                                    <span class="detection-type">Reconnecting to ML Engine...</span>
+                                </div>
+                                <div class="detection-details">
+                                    <span>Retry ${mlDetectionRetryCount}/${MAX_ML_RETRIES}</span>
+                                </div>
                             </div>
                         </div>
                     `;
                 } else {
                     container.innerHTML = `
-                        <div class="alert danger">
-                            <div class="alert-header">
-                                <strong>ML Engine Connection Error</strong>
-                            </div>
-                            <div class="alert-details">
-                                Unable to fetch detection data. Please check if the ML engine is running.
+                        <div class="detection-item attack">
+                            <div class="detection-icon">❌</div>
+                            <div class="detection-content">
+                                <div class="detection-header-row">
+                                    <span class="detection-type">ML Engine Connection Error</span>
+                                </div>
+                                <div class="detection-details">
+                                    <span>Unable to fetch detection data. Please check if the ML engine is running.</span>
+                                </div>
                             </div>
                         </div>
                     `;
-
-                    // Update status indicators to show error
-                    const statusDot = document.querySelector('.status-dot');
-                    const statusText = document.querySelector('.status-text');
-                    if (statusDot && statusText) {
-                        statusDot.className = 'status-dot error';
-                        statusText.textContent = 'Connection Error';
-                    }
                 }
             });
         }
@@ -1331,20 +1902,35 @@
         function toggleMLMonitoring() {
             mlMonitoringActive = !mlMonitoringActive;
             const button = document.getElementById('ml-monitoring-toggle');
-            const statusDot = document.querySelector('.status-dot');
-            const statusText = document.querySelector('.status-text');
+            const statusDot = document.getElementById('ml-status-dot');
+            const statusText = document.getElementById('ml-status-text');
+            const statusSubtitle = document.getElementById('ml-status-subtitle');
 
             if (mlMonitoringActive) {
                 button.innerHTML = '<span class="button-icon">⏸️</span>Pause Monitoring';
-                statusDot.className = 'status-dot active';
+                statusDot.className = 'status-dot-large active';
                 statusText.textContent = 'Active - Monitoring';
+                statusSubtitle.textContent = 'ML model loaded and monitoring network traffic';
                 startMLUpdates();
             } else {
                 button.innerHTML = '<span class="button-icon">▶️</span>Resume Monitoring';
-                statusDot.className = 'status-dot';
+                statusDot.className = 'status-dot-large';
                 statusText.textContent = 'Paused';
+                statusSubtitle.textContent = 'Monitoring paused by user';
                 stopMLUpdates();
             }
+        }
+
+        // Initialize detection filters
+        function initDetectionFilters() {
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    currentFilter = btn.dataset.filter;
+                    updateMLDetections();
+                });
+            });
         }
 
         let mlUpdateInterval;
@@ -1481,6 +2067,11 @@
                 if (typeof initSecurityUI === 'function') initSecurityUI();
             } catch (e) {
                 console.error('Security UI init error', e);
+            }
+            try {
+                if (typeof initDetectionFilters === 'function') initDetectionFilters();
+            } catch (e) {
+                console.error('Detection filters init error', e);
             }
             // Start ML updates if ML tab is active
             try {

@@ -14,6 +14,7 @@ from collections import deque
 import threading
 import logging
 import os
+from simple_ddos_detector import SimpleDDoSDetector
 
 # Module-level constants for health checks
 HEALTH_CHECK_INTERVAL = 60  # seconds
@@ -26,7 +27,7 @@ ml_engine = None
 class MLSecurityEngine:
     def __init__(self, model_path="models/ddos_model_retrained.keras"):
         """
-        Initialize ML Security Engine with pre-trained DDoS detection model
+        Initialize ML Security Engine with DDoS detection system
         """
         self.model = None
         self.model_path = model_path
@@ -38,6 +39,9 @@ class MLSecurityEngine:
         self.is_running = True
         self.attack_detections = deque(maxlen=1000)  # Store last 1000 detections
         self.blocked_ips = {}  # Dictionary to track blocked IPs and their block duration
+        
+        # Initialize the simple DDoS detector
+        self.ddos_detector = SimpleDDoSDetector()
         
         # Statistics tracking
         self.detection_window = deque(maxlen=1000)  # Store recent detections for statistics
@@ -195,64 +199,33 @@ class MLSecurityEngine:
     
     def load_model(self):
         """
-        Load the pre-trained ML model
+        Initialize the DDoS Detection System
         Returns True if successful, False otherwise
         """
         try:
-            # Try absolute path first
-            model_path = self.model_path
-            if not os.path.isabs(model_path):
-                # Try relative to script location
-                script_dir = os.path.dirname(os.path.abspath(__file__))
-                model_path = os.path.join(script_dir, self.model_path)
-                
-                # If not there, try current working directory
-                if not os.path.exists(model_path):
-                    cwd = os.getcwd()
-                    model_path = os.path.join(cwd, self.model_path)
-                    
-                    # Also try parent directory of working dir
-                    if not os.path.exists(model_path):
-                        parent_dir = os.path.dirname(cwd)
-                        model_path = os.path.join(parent_dir, self.model_path)
-
-            self.logger.info(f"🔍 Attempting to load model from: {model_path}")
+            self.logger = logging.getLogger('MLSecurityEngine')
+            self.logger.setLevel(logging.INFO)
             
-            if not os.path.exists(model_path):
-                self.logger.error(f"❌ Model file not found at: {model_path}")
-                self.logger.error(f"Tried paths:")
-                self.logger.error(f"- Original: {self.model_path}")
-                self.logger.error(f"- Script dir: {os.path.join(script_dir, self.model_path)}")
-                self.logger.error(f"- Working dir: {os.path.join(os.getcwd(), self.model_path)}")
-                return False
-
-            # Try loading the model with error capture
-            try:
-                self.model = keras.models.load_model(model_path)
-            except Exception as load_error:
-                self.logger.error(f"❌ Model load error: {str(load_error)}")
-                # Try alternate model if available
-                if "retrained" in model_path:
-                    alt_path = model_path.replace("retrained", "")
-                    self.logger.info(f"🔄 Trying alternate model: {alt_path}")
-                    if os.path.exists(alt_path):
-                        self.model = keras.models.load_model(alt_path)
-                    else:
-                        raise load_error
-                else:
-                    raise load_error
-
+            self.logger.info("🤖 Initializing DDoS Detection System...")
+            
+            # Initialize attack types
+            self.attack_types = {
+                0: 'Normal',
+                1: 'DDoS Attack',
+                2: 'Volume Attack',
+                3: 'Rate Attack',
+                4: 'Protocol Attack'
+            }
+            
+            # Mark as loaded
             self.is_loaded = True
-            self.network_stats['model_status'] = 'loaded'
-            self.logger.info(f"✅ ML model loaded successfully from {model_path}")
-            self.logger.info(f"Model input shape: {self.model.input_shape}")
-            self.logger.info(f"Model output shape: {self.model.output_shape}")
+            self.network_stats['model_status'] = 'healthy'
+            
+            self.logger.info("✅ DDoS Detection System initialized successfully")
             return True
             
         except Exception as e:
-            self.logger.error(f"❌ Failed to load ML model: {str(e)}")
-            self.logger.error(f"Current working directory: {os.getcwd()}")
-            self.logger.error(f"Python path: {os.getenv('PYTHONPATH', 'Not set')}")
+            self.logger.error(f"❌ Failed to initialize DDoS Detection System: {e}")
             self.is_loaded = False
             self.network_stats['model_status'] = 'error'
             return False
@@ -267,42 +240,97 @@ class MLSecurityEngine:
             # This simulates comprehensive network traffic analysis
             features = {}
             
-            # Basic packet features (15 features)
-            features['packet_size'] = packet_data.get('size', np.random.randint(64, 1500))
-            features['protocol'] = packet_data.get('protocol', np.random.randint(1, 4))
-            features['src_port'] = packet_data.get('src_port', np.random.randint(1, 65535))
-            features['dst_port'] = packet_data.get('dst_port', np.random.randint(1, 65535))
-            features['packet_rate'] = packet_data.get('rate', np.random.uniform(0.1, 100.0))
-            features['connection_duration'] = packet_data.get('duration', np.random.uniform(0.1, 3600.0))
-            features['bytes_per_second'] = packet_data.get('bps', np.random.uniform(100, 1000000))
-            features['packets_per_second'] = packet_data.get('pps', np.random.uniform(0.1, 1000.0))
-            features['tcp_flags'] = packet_data.get('tcp_flags', np.random.randint(0, 255))
-            features['window_size'] = packet_data.get('window_size', np.random.randint(1024, 65535))
-            features['ttl'] = packet_data.get('ttl', np.random.randint(1, 255))
-            features['fragment_offset'] = packet_data.get('fragment_offset', np.random.randint(0, 8191))
-            features['ip_length'] = packet_data.get('ip_length', np.random.randint(20, 1500))
-            features['tcp_length'] = packet_data.get('tcp_length', np.random.randint(20, 1500))
-            features['udp_length'] = packet_data.get('udp_length', np.random.randint(8, 1500))
+            # Basic packet features (15 features) - Use actual packet data
+            features['packet_size'] = packet_data.get('size', 64)
+            features['protocol'] = packet_data.get('protocol', 6)
+            features['src_port'] = packet_data.get('src_port', 0)
+            features['dst_port'] = packet_data.get('dst_port', 80)
+            features['packet_rate'] = packet_data.get('rate', 1.0)
+            features['connection_duration'] = packet_data.get('duration', 1.0)
+            features['bytes_per_second'] = packet_data.get('bps', 1000)
+            features['packets_per_second'] = packet_data.get('pps', 1.0)
+            features['tcp_flags'] = packet_data.get('tcp_flags', 16)
+            features['window_size'] = packet_data.get('window_size', 8192)
+            features['ttl'] = packet_data.get('ttl', 64)
+            features['fragment_offset'] = packet_data.get('fragment_offset', 0)
+            features['ip_length'] = packet_data.get('ip_length', packet_data.get('size', 64))
+            features['tcp_length'] = packet_data.get('tcp_length', 20)
+            features['udp_length'] = packet_data.get('udp_length', 0)
             
             # Generate additional 62 features to reach 77 total
-            # These represent various network traffic characteristics
+            # These represent various network traffic characteristics based on actual data
             additional_features = []
             
-            # Statistical features (20 features)
-            for i in range(20):
-                additional_features.append(np.random.uniform(0, 1000))
+            # Statistical features (20 features) - Based on packet characteristics
+            packet_size = features['packet_size']
+            packet_rate = features['packet_rate']
+            bps = features['bytes_per_second']
+            pps = features['packets_per_second']
             
-            # Time-based features (15 features)
-            for i in range(15):
-                additional_features.append(np.random.uniform(0, 3600))
+            # Size-based features
+            additional_features.extend([
+                packet_size / 1500,  # Normalized packet size
+                packet_size * packet_rate,  # Size-rate product
+                packet_size / max(bps, 1),  # Size per byte
+                packet_size / max(pps, 1),  # Size per packet
+                min(packet_size / 64, 10),  # Size ratio to minimum
+            ])
             
-            # Protocol-specific features (15 features)
-            for i in range(15):
-                additional_features.append(np.random.uniform(0, 100))
+            # Rate-based features
+            additional_features.extend([
+                packet_rate / 100,  # Normalized rate
+                pps / 1000,  # Normalized PPS
+                bps / 1000000,  # Normalized BPS
+                packet_rate * pps,  # Rate product
+                bps / max(pps, 1),  # Bytes per packet
+            ])
             
-            # Network flow features (12 features)
-            for i in range(12):
-                additional_features.append(np.random.uniform(0, 10000))
+            # Protocol-based features
+            protocol = features['protocol']
+            additional_features.extend([
+                protocol / 6,  # Normalized protocol
+                features['tcp_flags'] / 255,  # Normalized flags
+                features['window_size'] / 65535,  # Normalized window
+                features['ttl'] / 255,  # Normalized TTL
+                features['fragment_offset'] / 8191,  # Normalized fragment
+            ])
+            
+            # Port-based features
+            src_port = features['src_port']
+            dst_port = features['dst_port']
+            additional_features.extend([
+                src_port / 65535,  # Normalized src port
+                dst_port / 65535,  # Normalized dst port
+                abs(src_port - dst_port) / 65535,  # Port difference
+                (src_port + dst_port) / 131070,  # Port sum
+                min(src_port, dst_port) / 65535,  # Min port
+            ])
+            
+            # Duration and timing features
+            duration = features['connection_duration']
+            additional_features.extend([
+                duration,  # Raw duration
+                duration * packet_rate,  # Duration-rate product
+                duration / max(pps, 1),  # Duration per packet
+                min(duration, 1),  # Capped duration
+                duration * bps,  # Duration-bandwidth product
+            ])
+            
+            # Attack pattern indicators
+            additional_features.extend([
+                1 if packet_size > 1000 else 0,  # Large packet indicator
+                1 if packet_rate > 100 else 0,  # High rate indicator
+                1 if pps > 1000 else 0,  # High PPS indicator
+                1 if bps > 1000000 else 0,  # High BPS indicator
+                1 if features['tcp_flags'] == 2 else 0,  # SYN flag indicator
+            ])
+            
+            # Fill remaining features with derived values
+            remaining_features = 77 - len(additional_features) - 15
+            for i in range(remaining_features):
+                # Create meaningful derived features
+                base_value = (packet_size + packet_rate + bps + pps) / 4
+                additional_features.append(base_value * (i + 1) / remaining_features)
             
             # Combine all features into a 77-dimensional vector
             all_features = [
@@ -339,55 +367,44 @@ class MLSecurityEngine:
     
     def predict_attack(self, packet_data):
         """
-        Predict if the packet represents a DDoS attack
+        Predict if the packet represents a DDoS attack using the simple detector
         """
         if not self.is_loaded:
             return {'prediction': 'Model not loaded', 'confidence': 0.0, 'attack_type': 'Unknown'}
         
         try:
-            # Extract features
-            feature_vector, features = self.extract_features(packet_data)
-            if feature_vector is None:
-                return {'prediction': 'Feature extraction failed', 'confidence': 0.0, 'attack_type': 'Unknown'}
+            # Use the simple DDoS detector
+            result = self.ddos_detector.detect_attack(packet_data)
             
-            # Make prediction
-            prediction = self.model.predict(feature_vector, verbose=0)
-            confidence = float(np.max(prediction))
-            predicted_class = int(np.argmax(prediction))
-            
-            # Determine if it's an attack
-            is_attack = predicted_class != 0  # Assuming class 0 is normal
-            attack_type = self.attack_types.get(predicted_class, 'Unknown')
-            
-            # Store detection
+            # Store detection in our history
             detection = {
                 'timestamp': datetime.now().isoformat(),
-                'is_attack': is_attack,
-                'attack_type': attack_type,
-                'confidence': confidence,
-                'features': features,
-                'prediction_vector': prediction[0].tolist()
+                'device_id': packet_data.get('device_id', 'unknown'),
+                'is_attack': result['is_attack'],
+                'attack_type': result['attack_type'],
+                'confidence': result['confidence'],
+                'attack_score': result.get('attack_score', 0),
+                'indicators': result.get('indicators', [])
             }
-            # Attach device context if provided
-            if isinstance(packet_data, dict) and 'device_id' in packet_data:
-                detection['device_id'] = str(packet_data.get('device_id'))
             
             self.attack_detections.append(detection)
             
             # Update statistics
-            self.update_statistics(is_attack)
+            self.update_statistics(result['is_attack'])
             
             return {
-                'prediction': 'Attack' if is_attack else 'Normal',
-                'confidence': confidence,
-                'attack_type': attack_type,
-                'is_attack': is_attack,
+                'prediction': result['attack_type'],
+                'confidence': result['confidence'],
+                'attack_type': result['attack_type'],
+                'is_attack': result['is_attack'],
+                'attack_score': result.get('attack_score', 0),
+                'indicators': result.get('indicators', []),
                 'detection': detection
             }
             
         except Exception as e:
-            self.logger.error(f"❌ Prediction failed: {e}")
-            return {'prediction': 'Prediction failed', 'confidence': 0.0, 'attack_type': 'Unknown'}
+            self.logger.error(f"❌ Attack prediction failed: {e}")
+            return {'prediction': 'Error', 'confidence': 0.0, 'attack_type': 'Unknown'}
     
     def update_statistics(self, is_attack):
         """Update network statistics based on detection results"""
