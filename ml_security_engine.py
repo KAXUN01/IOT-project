@@ -31,7 +31,6 @@ class MLSecurityEngine:
         self.model = None
         self.model_path = model_path
         self.is_loaded = False
-    # (module-level health-check constants are used)
         self.initialization_time = time.time()
         self.last_health_check = time.time()
         self.reload_attempts = 0
@@ -39,12 +38,21 @@ class MLSecurityEngine:
         self.is_running = True
         self.attack_detections = deque(maxlen=1000)  # Store last 1000 detections
         self.blocked_ips = {}  # Dictionary to track blocked IPs and their block duration
+        
+        # Statistics tracking
+        self.detection_window = deque(maxlen=1000)  # Store recent detections for statistics
+        self.last_processing_times = deque(maxlen=100)  # Store last 100 processing times
+        self.false_positives = deque(maxlen=1000)  # Store known false positives
+        
         self.network_stats = {
             'total_packets': 0,
             'attack_packets': 0,
             'normal_packets': 0,
             'attack_rate': 0.0,
-            'detection_accuracy': 0.0,
+            'detection_rate': 0.0,
+            'false_positive_rate': 0.0,
+            'model_confidence': 0.0,
+            'processing_rate': 0.0,
             'uptime': 0,
             'last_health_check': None,
             'model_status': 'initializing'
@@ -86,6 +94,66 @@ class MLSecurityEngine:
             daemon=True
         )
         self.health_check_thread.start()
+
+    def update_detection_stats(self, prediction_time):
+        """
+        Update detection statistics based on recent detections
+        """
+        try:
+            current_time = time.time()
+            window_start = current_time - 300  # 5 minutes window
+
+            # Filter detections within the time window
+            recent_detections = [d for d in self.detection_window 
+                               if d['timestamp'] > window_start]
+
+            if recent_detections:
+                # Calculate detection rate
+                total_detections = len(recent_detections)
+                attack_detections = sum(1 for d in recent_detections 
+                                     if d['type'] != 'Normal')
+                
+                self.network_stats['detection_rate'] = round(
+                    (attack_detections / total_detections) * 100, 2)
+
+                # Calculate false positive rate (if ground truth is available)
+                false_positives = sum(1 for d in self.false_positives 
+                                    if d > window_start)
+                if attack_detections > 0:
+                    self.network_stats['false_positive_rate'] = round(
+                        (false_positives / attack_detections) * 100, 2)
+                else:
+                    self.network_stats['false_positive_rate'] = 0.0
+
+                # Calculate average model confidence
+                avg_confidence = np.mean([d['confidence'] for d in recent_detections])
+                self.network_stats['model_confidence'] = round(avg_confidence, 2)
+
+            # Update processing rate
+            if self.last_processing_times:
+                avg_processing_time = np.mean(self.last_processing_times)
+                self.network_stats['processing_rate'] = round(
+                    1.0 / avg_processing_time if avg_processing_time > 0 else 0, 2)
+            
+            # Update packet statistics
+            self.network_stats['total_packets'] += 1
+            if prediction_time is not None:
+                self.last_processing_times.append(prediction_time)
+
+        except Exception as e:
+            self.logger.error(f"Error updating detection stats: {e}")
+
+    def get_detection_stats(self):
+        """Get current detection statistics"""
+        return {
+            'detection_rate': self.network_stats['detection_rate'],
+            'false_positive_rate': self.network_stats['false_positive_rate'],
+            'model_confidence': self.network_stats['model_confidence'],
+            'processing_rate': self.network_stats['processing_rate'],
+            'total_packets': self.network_stats['total_packets'],
+            'attack_packets': self.network_stats['attack_packets'],
+            'normal_packets': self.network_stats['normal_packets']
+        }
 
     def check_health(self) -> bool:
         """
