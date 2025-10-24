@@ -194,25 +194,21 @@ class SDNTester:
         # Start devices
         threads = self.start_devices()
         
-        # Monitor for 30 seconds
-        print("📈 Monitoring system for 30 seconds...")
-        for i in range(6):
-            self.monitor_dashboard()
-            time.sleep(5)
+        print("📈 Monitoring system continuously...")
+        print("Press Ctrl+C to stop the devices...")
         
-        # Test SDN policies
-        self.test_sdn_policies()
-        
-        # Test authorization
-        self.test_device_authorization()
-        
-        # Stop devices
-        print("🛑 Stopping test devices...")
-        for device in self.devices:
-            device.stop_device()
-        
-        print("✅ SDN Test Complete!")
-        print("🌐 Check the dashboard at: http://localhost:5000")
+        try:
+            while True:
+                self.monitor_dashboard()
+                time.sleep(5)
+        except KeyboardInterrupt:
+            # Stop devices when Ctrl+C is pressed
+            print("\n🛑 Stopping test devices...")
+            for device in self.devices:
+                device.stop_device()
+            
+            print("✅ SDN Test Complete!")
+            print("🌐 Check the dashboard at: http://localhost:5000")
 
 def main():
     print("🔐 IoT Security Framework Test Suite")
