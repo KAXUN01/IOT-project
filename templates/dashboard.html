@@ -750,19 +750,52 @@
 
         <!-- ML Engine Tab -->
         <section id="ml-engine" class="tab-content">
-            <div class="card">
-                <h3>ML Engine Status</h3>
-                <div class="grid-container">
-                    <div id="ml-metrics"></div>
+            <div class="grid-container">
+                <div class="card">
+                    <h3>ML Engine Status</h3>
+                    <div id="ml-status" class="metric-value">
+                        <div class="status-indicator">
+                            <span class="status-dot"></span>
+                            <span class="status-text">Initializing...</span>
+                        </div>
+                    </div>
+                    <div class="button-group" style="margin-top: 1rem;">
+                        <button class="button button-primary" onclick="initializeML()">
+                            <span class="button-icon">🔄</span>Initialize ML Engine
+                        </button>
+                        <button class="button button-primary" id="ml-monitoring-toggle" onclick="toggleMLMonitoring()">
+                            <span class="button-icon">⏸️</span>Pause Monitoring
+                        </button>
+                    </div>
                 </div>
-                <div style="margin-top: 1rem;">
-                    <button class="button button-primary" onclick="initializeML()">Initialize ML Engine</button>
-                    <button class="button button-primary" onclick="toggleMLMonitoring()">Toggle Monitoring</button>
+                <div class="card">
+                    <h3>Detection Statistics</h3>
+                    <div id="ml-metrics" class="metrics-grid">
+                        <div class="metric-item">
+                            <span class="metric-label">Detection Rate</span>
+                            <span class="metric-value">--</span>
+                        </div>
+                        <div class="metric-item">
+                            <span class="metric-label">False Positive Rate</span>
+                            <span class="metric-value">--</span>
+                        </div>
+                        <div class="metric-item">
+                            <span class="metric-label">Model Confidence</span>
+                            <span class="metric-value">--</span>
+                        </div>
+                        <div class="metric-item">
+                            <span class="metric-label">Processing Rate</span>
+                            <span class="metric-value">--</span>
+                        </div>
+                    </div>
                 </div>
             </div>
+            
             <div class="card">
-                <h3>Attack Detection Log</h3>
-                <div id="ml-detections" class="scroll-container"></div>
+                <h3>Real-time Attack Detection</h3>
+                <div id="ml-detections" class="scroll-container">
+                    <div class="loading-indicator">Loading detection data...</div>
+                </div>
             </div>
         </section>
 
@@ -1098,16 +1131,36 @@
         }
 
         // ML Engine Functions
+        let mlMonitoringActive = true;
+        
         function initializeML() {
+            const statusDot = document.querySelector('.status-dot');
+            const statusText = document.querySelector('.status-text');
+            statusDot.className = 'status-dot';
+            statusText.textContent = 'Initializing...';
+
             fetch('/ml/initialize')
                 .then(response => response.json())
                 .then(data => {
                     if (data.status === 'success') {
                         showAlert('ML Engine initialized successfully', 'success');
+                        statusDot.className = 'status-dot active';
+                        statusText.textContent = 'Active - Monitoring';
+                        mlMonitoringActive = true;
                         updateMLMetrics();
+                        // Start periodic updates
+                        startMLUpdates();
                     } else {
                         showAlert('Failed to initialize ML Engine', 'danger');
+                        statusDot.className = 'status-dot error';
+                        statusText.textContent = 'Initialization Failed';
                     }
+                })
+                .catch(error => {
+                    console.error('Error initializing ML engine:', error);
+                    showAlert('Failed to initialize ML Engine', 'danger');
+                    statusDot.className = 'status-dot error';
+                    statusText.textContent = 'Connection Error';
                 });
         }
 
@@ -1115,17 +1168,50 @@
             fetch('/ml/status')
                 .then(response => response.json())
                 .then(data => {
-                    const container = document.getElementById('ml-metrics');
-                    container.innerHTML = `
-                        <div class="card">
-                            <h3>Detection Rate</h3>
-                            <div class="metric-value">${data.statistics.detection_rate}%</div>
-                        </div>
-                        <div class="card">
-                            <h3>False Positive Rate</h3>
-                            <div class="metric-value">${data.statistics.false_positive_rate}%</div>
-                        </div>
-                    `;
+                    // Update status indicator
+                    const statusDot = document.querySelector('.status-dot');
+                    const statusText = document.querySelector('.status-text');
+                    
+                    if (data.status === 'active') {
+                        statusDot.className = 'status-dot active';
+                        statusText.textContent = 'Active - Monitoring';
+                    } else if (data.status === 'error') {
+                        statusDot.className = 'status-dot error';
+                        statusText.textContent = 'Error - Check Logs';
+                    } else {
+                        statusDot.className = 'status-dot';
+                        statusText.textContent = 'Initializing...';
+                    }
+
+                    // Update metrics
+                    const metrics = document.getElementById('ml-metrics');
+                    if (data.statistics) {
+                        metrics.innerHTML = `
+                            <div class="metric-item">
+                                <span class="metric-label">Detection Rate</span>
+                                <span class="metric-value">${data.statistics.detection_rate}%</span>
+                            </div>
+                            <div class="metric-item">
+                                <span class="metric-label">False Positive Rate</span>
+                                <span class="metric-value">${data.statistics.false_positive_rate}%</span>
+                            </div>
+                            <div class="metric-item">
+                                <span class="metric-label">Model Confidence</span>
+                                <span class="metric-value">${data.statistics.confidence}%</span>
+                            </div>
+                            <div class="metric-item">
+                                <span class="metric-label">Processing Rate</span>
+                                <span class="metric-value">${data.statistics.processing_rate}/sec</span>
+                            </div>
+                        `;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching ML metrics:', error);
+                    const statusDot = document.querySelector('.status-dot');
+                    const statusText = document.querySelector('.status-text');
+                    statusDot.className = 'status-dot error';
+                    statusText.textContent = 'Connection Error';
                 });
         }
 
@@ -1134,14 +1220,70 @@
                 .then(response => response.json())
                 .then(detections => {
                     const container = document.getElementById('ml-detections');
+                    if (!detections || detections.length === 0) {
+                        container.innerHTML = '<div class="alert success">No threats detected</div>';
+                        return;
+                    }
+
                     container.innerHTML = detections.map(detection => `
                         <div class="alert ${detection.is_attack ? 'danger' : 'success'}">
-                            <strong>${detection.attack_type}</strong>
-                            <span>${new Date(detection.timestamp).toLocaleTimeString()}</span>
-                            <span>${(detection.confidence * 100).toFixed(2)}% confidence</span>
+                            <div class="alert-header">
+                                <strong>${detection.attack_type || 'Normal Traffic'}</strong>
+                                <span class="alert-timestamp">${new Date(detection.timestamp).toLocaleTimeString()}</span>
+                            </div>
+                            <div class="alert-details">
+                                <span class="confidence">Confidence: ${(detection.confidence * 100).toFixed(2)}%</span>
+                                ${detection.details ? `<span class="details">${detection.details}</span>` : ''}
+                            </div>
                         </div>
                     `).join('');
+                })
+                .catch(error => {
+                    console.error('Error fetching ML detections:', error);
+                    const container = document.getElementById('ml-detections');
+                    container.innerHTML = '<div class="alert danger">Error loading detection data</div>';
                 });
+        }
+
+        function toggleMLMonitoring() {
+            mlMonitoringActive = !mlMonitoringActive;
+            const button = document.getElementById('ml-monitoring-toggle');
+            const statusDot = document.querySelector('.status-dot');
+            const statusText = document.querySelector('.status-text');
+
+            if (mlMonitoringActive) {
+                button.innerHTML = '<span class="button-icon">⏸️</span>Pause Monitoring';
+                statusDot.className = 'status-dot active';
+                statusText.textContent = 'Active - Monitoring';
+                startMLUpdates();
+            } else {
+                button.innerHTML = '<span class="button-icon">▶️</span>Resume Monitoring';
+                statusDot.className = 'status-dot';
+                statusText.textContent = 'Paused';
+                stopMLUpdates();
+            }
+        }
+
+        let mlUpdateInterval;
+
+        function startMLUpdates() {
+            // Initial updates
+            updateMLMetrics();
+            updateMLDetections();
+
+            // Set up periodic updates
+            mlUpdateInterval = setInterval(() => {
+                if (mlMonitoringActive && document.getElementById('ml-engine').classList.contains('active')) {
+                    updateMLMetrics();
+                    updateMLDetections();
+                }
+            }, 5000); // Update every 5 seconds
+        }
+
+        function stopMLUpdates() {
+            if (mlUpdateInterval) {
+                clearInterval(mlUpdateInterval);
+            }
         }
 
         function updateAnalytics() {
