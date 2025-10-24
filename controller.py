@@ -20,6 +20,36 @@ app = Flask(__name__)
 
 # Device authorization (static for now, can be dynamic)
 authorized_devices = {
+# ML Engine Health Check endpoint
+@app.route('/ml/health')
+def ml_health():
+    """Get ML engine health status"""
+    try:
+        global ml_engine
+        if not ml_engine:
+            return json.dumps({
+                'status': 'error',
+                'message': 'ML engine not initialized'
+            }), 503
+            
+        health_data = {
+            'status': 'healthy' if ml_engine.is_loaded else 'error',
+            'uptime': ml_engine.network_stats['uptime'],
+            'last_health_check': ml_engine.network_stats['last_health_check'],
+            'model_status': ml_engine.network_stats['model_status'],
+            'total_packets_processed': ml_engine.network_stats['total_packets'],
+            'detection_accuracy': ml_engine.network_stats['detection_accuracy']
+        }
+        
+        return json.dumps(health_data), 200 if ml_engine.is_loaded else 503
+        
+    except Exception as e:
+        app.logger.error(f"Health check error: {str(e)}")
+        return json.dumps({
+            'status': 'error',
+            'message': str(e)
+        }), 500
+
     "ESP32_2": True,
     "ESP32_3": True,
     "ESP32_4": False
@@ -414,12 +444,73 @@ def ml_status():
 @app.route('/ml/detections')
 def ml_detections():
     """Get recent attack detections"""
-    global ml_engine
-    if ml_engine and ml_engine.is_loaded:
-        detections = ml_engine.get_recent_detections(20)
-        return json.dumps(detections)
-    else:
-        return json.dumps([])
+    try:
+        global ml_engine
+
+    # ML Engine Health Check endpoint
+    @app.route('/ml/health')
+    def ml_health():
+        """Get ML engine health status"""
+        try:
+            global ml_engine
+            if not ml_engine:
+                return json.dumps({
+                    'status': 'error',
+                    'message': 'ML engine not initialized'
+                }), 503
+            
+            health_data = {
+                'status': 'healthy' if ml_engine.is_loaded else 'error',
+                'uptime': ml_engine.network_stats['uptime'],
+                'last_health_check': ml_engine.network_stats['last_health_check'],
+                'model_status': ml_engine.network_stats['model_status'],
+                'total_packets_processed': ml_engine.network_stats['total_packets'],
+                'detection_accuracy': ml_engine.network_stats['detection_accuracy']
+            }
+        
+            return json.dumps(health_data), 200 if ml_engine.is_loaded else 503
+        
+        except Exception as e:
+            app.logger.error(f"Health check error: {str(e)}")
+            return json.dumps({
+                'status': 'error',
+                'message': str(e)
+            }), 500
+        if not ml_engine:
+            return json.dumps({'error': 'ML engine not initialized', 'status': 'error'}), 503
+        
+        if not ml_engine.is_loaded:
+            return json.dumps({'error': 'ML model not loaded', 'status': 'error'}), 503
+            
+        detections = list(ml_engine.attack_detections)[-20:]  # Get last 20 detections
+        
+        # Ensure all data is JSON serializable
+        clean_detections = []
+        for d in detections:
+            clean_det = {
+                'timestamp': d['timestamp'],
+                'is_attack': bool(d['is_attack']),
+                'attack_type': str(d['attack_type']),
+                'confidence': float(d['confidence'])
+            }
+            if 'device_id' in d:
+                clean_det['device_id'] = str(d['device_id'])
+            if 'details' in d:
+                clean_det['details'] = str(d['details'])
+            clean_detections.append(clean_det)
+            
+        return json.dumps({
+            'status': 'success',
+            'detections': clean_detections,
+            'stats': ml_engine.get_attack_statistics()
+        }), 200
+    except Exception as e:
+        app.logger.error(f"Error in /ml/detections: {str(e)}")
+        return json.dumps({
+            'error': 'Internal server error',
+            'status': 'error',
+            'message': str(e)
+        }), 500
 
 @app.route('/ml/analyze_packet', methods=['POST'])
 def analyze_packet():

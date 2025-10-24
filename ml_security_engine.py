@@ -22,13 +22,25 @@ class MLSecurityEngine:
         self.model = None
         self.model_path = model_path
         self.is_loaded = False
+        # Constants for health checks
+        HEALTH_CHECK_INTERVAL = 60  # seconds
+        MAX_RELOAD_ATTEMPTS = 3
+        INIT_TIMEOUT = 30  # seconds
+        self.initialization_time = time.time()
+        self.last_health_check = time.time()
+        self.reload_attempts = 0
+        self.health_check_thread = None
+        self.is_running = True
         self.attack_detections = deque(maxlen=1000)  # Store last 1000 detections
         self.network_stats = {
             'total_packets': 0,
             'attack_packets': 0,
             'normal_packets': 0,
             'attack_rate': 0.0,
-            'detection_accuracy': 0.0
+            'detection_accuracy': 0.0,
+            'uptime': 0,
+            'last_health_check': None,
+            'model_status': 'initializing'
         }
         self.real_time_features = deque(maxlen=100)  # Store last 100 feature vectors
         self.attack_types = {
@@ -43,19 +55,91 @@ class MLSecurityEngine:
         self.logger = logging.getLogger(__name__)
         
         # Load the model
-        self.load_model()
+        if not self.load_model():
+            self.logger.error("❌ Initial model load failed")
+            return
+            
+        # Start health check thread
+        self.start_health_checks()
+
+    def start_health_checks(self):
+        """Start periodic health checks"""
+        def health_check_loop():
+            while self.is_running:
+                try:
+                    self.check_health()
+                    time.sleep(HEALTH_CHECK_INTERVAL)
+                except Exception as e:
+                    self.logger.error(f"Health check error: {e}")
+                    time.sleep(5)  # Wait before retry
+        
+        self.health_check_thread = threading.Thread(
+            target=health_check_loop,
+            name="ML_HealthCheck",
+            daemon=True
+        )
+        self.health_check_thread.start()
+
+    def check_health(self) -> bool:
+        """
+        Check ML engine health and reload if necessary
+        Returns True if healthy, False otherwise
+        """
+        try:
+            self.last_health_check = time.time()
+            self.network_stats['last_health_check'] = datetime.now().isoformat()
+            
+            # Update uptime
+            self.network_stats['uptime'] = time.time() - self.initialization_time
+            
+            # Check if model is loaded
+            if not self.is_loaded or self.model is None:
+                self.logger.warning("❗ Model not loaded during health check")
+                if self.reload_attempts < MAX_RELOAD_ATTEMPTS:
+                    self.reload_attempts += 1
+                    self.logger.info(f"Attempting model reload ({self.reload_attempts}/{MAX_RELOAD_ATTEMPTS})")
+                    return self.load_model()
+                return False
+            
+            # Test model with dummy data
+            test_input = np.random.rand(1, 77)  # Match model input shape
+            try:
+                _ = self.model.predict(test_input, verbose=0)
+                self.network_stats['model_status'] = 'healthy'
+                self.reload_attempts = 0  # Reset counter on successful predict
+                return True
+            except Exception as e:
+                self.logger.error(f"Model prediction failed during health check: {e}")
+                self.network_stats['model_status'] = 'error'
+                return False
+                
+        except Exception as e:
+            self.logger.error(f"Health check failed: {e}")
+            self.network_stats['model_status'] = 'error'
+            return False
     
     def load_model(self):
-        """Load the pre-trained ML model"""
+        """
+        Load the pre-trained ML model
+        Returns True if successful, False otherwise
+        """
         try:
+            if not os.path.exists(self.model_path):
+                self.logger.error(f"❌ Model file not found: {self.model_path}")
+                return False
+
             self.model = keras.models.load_model(self.model_path)
             self.is_loaded = True
+            self.network_stats['model_status'] = 'loaded'
             self.logger.info(f"✅ ML model loaded successfully from {self.model_path}")
             self.logger.info(f"Model input shape: {self.model.input_shape}")
             self.logger.info(f"Model output shape: {self.model.output_shape}")
+            return True
         except Exception as e:
             self.logger.error(f"❌ Failed to load ML model: {e}")
             self.is_loaded = False
+            self.network_stats['model_status'] = 'error'
+            return False
     
     def extract_features(self, packet_data):
         """

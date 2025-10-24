@@ -1223,34 +1223,102 @@
                 });
         }
 
-        function updateMLDetections() {
-            fetch('/ml/detections')
-                .then(response => response.json())
-                .then(detections => {
-                    const container = document.getElementById('ml-detections');
-                    if (!detections || detections.length === 0) {
-                        container.innerHTML = '<div class="alert success">No threats detected</div>';
-                        return;
-                    }
+        let mlDetectionRetryCount = 0;
+        const MAX_ML_RETRIES = 3;
 
-                    container.innerHTML = detections.map(detection => `
-                        <div class="alert ${detection.is_attack ? 'danger' : 'success'}">
+        function updateMLDetections(isRetry = false) {
+            if (!isRetry) {
+                mlDetectionRetryCount = 0;
+            }
+
+            fetch('/ml/detections', {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json'
+                }
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(detections => {
+                mlDetectionRetryCount = 0; // Reset retry count on success
+                const container = document.getElementById('ml-detections');
+                
+                if (!container) {
+                    console.warn('ML detections container not found');
+                    return;
+                }
+
+                if (!detections || detections.length === 0) {
+                    container.innerHTML = '<div class="alert success">No threats detected</div>';
+                    return;
+                }
+
+                container.innerHTML = detections.map(detection => `
+                    <div class="alert ${detection.is_attack ? 'danger' : 'success'}">
+                        <div class="alert-header">
+                            <strong>${detection.attack_type || 'Normal Traffic'}</strong>
+                            <span class="alert-timestamp">${new Date(detection.timestamp).toLocaleTimeString()}</span>
+                        </div>
+                        <div class="alert-details">
+                            <span class="confidence">Confidence: ${(detection.confidence * 100).toFixed(2)}%</span>
+                            ${detection.details ? `<span class="details">${detection.details}</span>` : ''}
+                        </div>
+                    </div>
+                `).join('');
+
+                // Update status indicators if exists
+                const statusDot = document.querySelector('.status-dot');
+                const statusText = document.querySelector('.status-text');
+                if (statusDot && statusText) {
+                    statusDot.className = 'status-dot active';
+                    statusText.textContent = 'Active - Monitoring';
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching ML detections:', error);
+                const container = document.getElementById('ml-detections');
+                if (!container) return;
+
+                // Handle retry logic
+                if (mlDetectionRetryCount < MAX_ML_RETRIES) {
+                    mlDetectionRetryCount++;
+                    console.log(`Retrying ML detection update (${mlDetectionRetryCount}/${MAX_ML_RETRIES})...`);
+                    setTimeout(() => updateMLDetections(true), 2000 * mlDetectionRetryCount);
+                    container.innerHTML = `
+                        <div class="alert warning">
                             <div class="alert-header">
-                                <strong>${detection.attack_type || 'Normal Traffic'}</strong>
-                                <span class="alert-timestamp">${new Date(detection.timestamp).toLocaleTimeString()}</span>
+                                <strong>Reconnecting to ML Engine...</strong>
                             </div>
                             <div class="alert-details">
-                                <span class="confidence">Confidence: ${(detection.confidence * 100).toFixed(2)}%</span>
-                                ${detection.details ? `<span class="details">${detection.details}</span>` : ''}
+                                Retry ${mlDetectionRetryCount}/${MAX_ML_RETRIES}
                             </div>
                         </div>
-                    `).join('');
-                })
-                .catch(error => {
-                    console.error('Error fetching ML detections:', error);
-                    const container = document.getElementById('ml-detections');
-                    container.innerHTML = '<div class="alert danger">Error loading detection data</div>';
-                });
+                    `;
+                } else {
+                    container.innerHTML = `
+                        <div class="alert danger">
+                            <div class="alert-header">
+                                <strong>ML Engine Connection Error</strong>
+                            </div>
+                            <div class="alert-details">
+                                Unable to fetch detection data. Please check if the ML engine is running.
+                            </div>
+                        </div>
+                    `;
+
+                    // Update status indicators to show error
+                    const statusDot = document.querySelector('.status-dot');
+                    const statusText = document.querySelector('.status-text');
+                    if (statusDot && statusText) {
+                        statusDot.className = 'status-dot error';
+                        statusText.textContent = 'Connection Error';
+                    }
+                }
+            });
         }
 
         function toggleMLMonitoring() {
