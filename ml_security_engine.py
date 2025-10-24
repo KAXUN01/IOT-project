@@ -38,6 +38,7 @@ class MLSecurityEngine:
         self.health_check_thread = None
         self.is_running = True
         self.attack_detections = deque(maxlen=1000)  # Store last 1000 detections
+        self.blocked_ips = {}  # Dictionary to track blocked IPs and their block duration
         self.network_stats = {
             'total_packets': 0,
             'attack_packets': 0,
