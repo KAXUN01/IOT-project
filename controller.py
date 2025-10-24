@@ -417,6 +417,10 @@ def initialize_ml():
     """Initialize the ML security engine"""
     global ml_engine, ml_monitoring_active
     try:
+        # Already initialized and healthy
+        if ml_engine and ml_engine.is_loaded:
+            return json.dumps({'status': 'success', 'message': 'ML engine already running'})
+
         ml_engine = initialize_ml_engine()
         if ml_engine and ml_engine.is_loaded:
             ml_monitoring_active = True
@@ -431,6 +435,18 @@ def initialize_ml():
 def ml_status():
     """Get ML engine status"""
     global ml_engine, ml_monitoring_active
+    
+    # Auto-initialize if not running
+    if not ml_engine:
+        try:
+            ml_engine = initialize_ml_engine()
+            if ml_engine and ml_engine.is_loaded:
+                ml_monitoring_active = True
+                ml_engine.start_monitoring()
+                app.logger.info("ML engine auto-initialized from status endpoint")
+        except Exception as e:
+            app.logger.error(f"Auto-initialization failed in status: {e}")
+    
     if ml_engine and ml_engine.is_loaded:
         stats = ml_engine.get_attack_statistics()
         return json.dumps({
@@ -445,7 +461,23 @@ def ml_status():
 def ml_detections():
     """Get recent attack detections"""
     try:
-        global ml_engine
+        global ml_engine, ml_monitoring_active
+        
+        # Auto-initialize if not running
+        if not ml_engine:
+            try:
+                ml_engine = initialize_ml_engine()
+                if ml_engine and ml_engine.is_loaded:
+                    ml_monitoring_active = True
+                    ml_engine.start_monitoring()
+                    app.logger.info("ML engine auto-initialized from detections endpoint")
+            except Exception as e:
+                app.logger.error(f"Auto-initialization failed in detections: {e}")
+                return json.dumps({
+                    'error': 'ML engine initialization failed',
+                    'status': 'error',
+                    'message': str(e)
+                }), 503
 
         if not ml_engine:
             return json.dumps({'error': 'ML engine not initialized', 'status': 'error'}), 503

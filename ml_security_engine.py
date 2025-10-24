@@ -130,19 +130,60 @@ class MLSecurityEngine:
         Returns True if successful, False otherwise
         """
         try:
-            if not os.path.exists(self.model_path):
-                self.logger.error(f"❌ Model file not found: {self.model_path}")
+            # Try absolute path first
+            model_path = self.model_path
+            if not os.path.isabs(model_path):
+                # Try relative to script location
+                script_dir = os.path.dirname(os.path.abspath(__file__))
+                model_path = os.path.join(script_dir, self.model_path)
+                
+                # If not there, try current working directory
+                if not os.path.exists(model_path):
+                    cwd = os.getcwd()
+                    model_path = os.path.join(cwd, self.model_path)
+                    
+                    # Also try parent directory of working dir
+                    if not os.path.exists(model_path):
+                        parent_dir = os.path.dirname(cwd)
+                        model_path = os.path.join(parent_dir, self.model_path)
+
+            self.logger.info(f"🔍 Attempting to load model from: {model_path}")
+            
+            if not os.path.exists(model_path):
+                self.logger.error(f"❌ Model file not found at: {model_path}")
+                self.logger.error(f"Tried paths:")
+                self.logger.error(f"- Original: {self.model_path}")
+                self.logger.error(f"- Script dir: {os.path.join(script_dir, self.model_path)}")
+                self.logger.error(f"- Working dir: {os.path.join(os.getcwd(), self.model_path)}")
                 return False
 
-            self.model = keras.models.load_model(self.model_path)
+            # Try loading the model with error capture
+            try:
+                self.model = keras.models.load_model(model_path)
+            except Exception as load_error:
+                self.logger.error(f"❌ Model load error: {str(load_error)}")
+                # Try alternate model if available
+                if "retrained" in model_path:
+                    alt_path = model_path.replace("retrained", "")
+                    self.logger.info(f"🔄 Trying alternate model: {alt_path}")
+                    if os.path.exists(alt_path):
+                        self.model = keras.models.load_model(alt_path)
+                    else:
+                        raise load_error
+                else:
+                    raise load_error
+
             self.is_loaded = True
             self.network_stats['model_status'] = 'loaded'
-            self.logger.info(f"✅ ML model loaded successfully from {self.model_path}")
+            self.logger.info(f"✅ ML model loaded successfully from {model_path}")
             self.logger.info(f"Model input shape: {self.model.input_shape}")
             self.logger.info(f"Model output shape: {self.model.output_shape}")
             return True
+            
         except Exception as e:
-            self.logger.error(f"❌ Failed to load ML model: {e}")
+            self.logger.error(f"❌ Failed to load ML model: {str(e)}")
+            self.logger.error(f"Current working directory: {os.getcwd()}")
+            self.logger.error(f"Python path: {os.getenv('PYTHONPATH', 'Not set')}")
             self.is_loaded = False
             self.network_stats['model_status'] = 'error'
             return False
