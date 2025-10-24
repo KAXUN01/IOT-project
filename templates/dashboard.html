@@ -1243,39 +1243,46 @@
                 }
                 return response.json();
             })
-            .then(detections => {
+            .then(data => {
                 mlDetectionRetryCount = 0; // Reset retry count on success
                 const container = document.getElementById('ml-detections');
-                
+
                 if (!container) {
                     console.warn('ML detections container not found');
                     return;
                 }
 
+                // Support both legacy array responses and the new structured response
+                const detections = Array.isArray(data) ? data : (data && data.detections) ? data.detections : [];
+
                 if (!detections || detections.length === 0) {
                     container.innerHTML = '<div class="alert success">No threats detected</div>';
-                    return;
+                } else {
+                    container.innerHTML = detections.map(detection => `
+                        <div class="alert ${detection.is_attack ? 'danger' : 'success'}">
+                            <div class="alert-header">
+                                <strong>${detection.attack_type || 'Normal Traffic'}</strong>
+                                <span class="alert-timestamp">${detection.timestamp ? new Date(detection.timestamp).toLocaleTimeString() : ''}</span>
+                            </div>
+                            <div class="alert-details">
+                                <span class="confidence">Confidence: ${(Number(detection.confidence) * 100).toFixed(2)}%</span>
+                                ${detection.details ? `<span class="details">${detection.details}</span>` : ''}
+                            </div>
+                        </div>
+                    `).join('');
                 }
 
-                container.innerHTML = detections.map(detection => `
-                    <div class="alert ${detection.is_attack ? 'danger' : 'success'}">
-                        <div class="alert-header">
-                            <strong>${detection.attack_type || 'Normal Traffic'}</strong>
-                            <span class="alert-timestamp">${new Date(detection.timestamp).toLocaleTimeString()}</span>
-                        </div>
-                        <div class="alert-details">
-                            <span class="confidence">Confidence: ${(detection.confidence * 100).toFixed(2)}%</span>
-                            ${detection.details ? `<span class="details">${detection.details}</span>` : ''}
-                        </div>
-                    </div>
-                `).join('');
-
-                // Update status indicators if exists
+                // Update status indicators if exists — prefer stats from structured response
                 const statusDot = document.querySelector('.status-dot');
                 const statusText = document.querySelector('.status-text');
                 if (statusDot && statusText) {
-                    statusDot.className = 'status-dot active';
-                    statusText.textContent = 'Active - Monitoring';
+                    if (data && data.stats) {
+                        statusDot.className = 'status-dot active';
+                        statusText.textContent = `Active - ${data.stats.recent_attacks || 0} recent attacks`;
+                    } else {
+                        statusDot.className = 'status-dot active';
+                        statusText.textContent = 'Active - Monitoring';
+                    }
                 }
             })
             .catch(error => {
