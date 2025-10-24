@@ -314,6 +314,68 @@ def get_health_metrics():
 def get_policy_logs():
     return json.dumps(policy_logs[-10:])  # Return last 10 logs
 
+
+@app.route('/toggle_policy/<policy>', methods=['POST'])
+def toggle_policy(policy):
+    """Toggle a named SDN policy and return its new state as JSON"""
+    if policy not in sdn_policies:
+        return json.dumps({'error': 'Unknown policy'}), 400
+
+    # flip the policy
+    sdn_policies[policy] = not sdn_policies[policy]
+    state = sdn_policies[policy]
+    policy_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] {policy.replace('_', ' ').title()} policy {'enabled' if state else 'disabled'}")
+    return json.dumps({'enabled': state})
+
+
+@app.route('/clear_policy_logs', methods=['POST'])
+def clear_policy_logs():
+    """Clear policy logs (useful for UI testing)"""
+    policy_logs.clear()
+    return json.dumps({'status': 'ok'})
+
+
+@app.route('/get_security_alerts')
+def get_security_alerts():
+    """Return recent security alerts. For now, convert policy logs into structured alerts.
+
+    Each alert contains: message, timestamp, severity (low/medium/high), optional device
+    """
+    alerts = []
+    for entry in reversed(policy_logs[-20:]):
+        # entries look like: [HH:MM:SS] Message
+        try:
+            ts_part, msg_part = entry.split(']', 1)
+            ts = ts_part.strip('[')
+            message = msg_part.strip()
+        except Exception:
+            ts = datetime.now().strftime('%H:%M:%S')
+            message = entry
+
+        # simple severity heuristic
+        severity = 'low'
+        low_keywords = ['delayed', 'routed', 'rerouted']
+        high_keywords = ['blocked', 'attack', 'ddos', 'denied']
+        if any(k in message.lower() for k in high_keywords):
+            severity = 'high'
+        elif any(k in message.lower() for k in low_keywords):
+            severity = 'medium'
+
+        alerts.append({
+            'timestamp': datetime.now().isoformat(),
+            'message': message,
+            'severity': severity,
+            'device': None
+        })
+
+    return json.dumps(alerts)
+
+
+@app.route('/get_policies')
+def get_policies():
+    """Return current policy states"""
+    return json.dumps(sdn_policies)
+
 @app.route('/get_sdn_metrics')
 def get_sdn_metrics():
     update_sdn_metrics()

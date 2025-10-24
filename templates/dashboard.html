@@ -930,6 +930,69 @@
                 network.fit();
             }
         });
+
+        // Security UI initialization: filters, search box and loading initial policy states
+        function debounce(fn, wait) {
+            let t;
+            return function(...args) {
+                clearTimeout(t);
+                t = setTimeout(() => fn.apply(this, args), wait);
+            };
+        }
+
+        function loadPolicies() {
+            fetch('/get_policies')
+                .then(resp => resp.json())
+                .then(policies => {
+                    Object.keys(policies).forEach(policy => {
+                        const btn = document.getElementById(`${policy.replace('_', '-')}-btn`);
+                        const status = document.getElementById(`${policy.replace('_', '-')}-status`);
+                        const enabled = !!policies[policy];
+                        if (btn) {
+                            btn.textContent = enabled ? 'Disable' : 'Enable';
+                            btn.className = `button ${enabled ? 'button-danger' : 'button-primary'}`;
+                        }
+                        if (status) {
+                            status.textContent = enabled ? 'Active' : 'Inactive';
+                            status.className = `status-indicator ${enabled ? 'active' : ''}`;
+                        }
+                    });
+                })
+                .catch(() => {
+                    console.warn('Unable to load policies');
+                });
+        }
+
+        function initSecurityUI() {
+            // filter buttons
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    updateSecurityAlerts();
+                });
+            });
+
+            // search box
+            const searchInput = document.getElementById('log-search');
+            if (searchInput) {
+                searchInput.addEventListener('input', debounce(() => {
+                    updatePolicyLogs();
+                }, 300));
+            }
+
+            // load initial policy states
+            loadPolicies();
+
+            // initial logs/alerts if security tab active
+            if (document.getElementById('security').classList.contains('active')) {
+                updatePolicyLogs();
+                updateSecurityAlerts();
+            }
+        }
+
+        // Initialize security UI once DOM is ready
+        document.addEventListener('DOMContentLoaded', initSecurityUI);
     </script>
 </body>
 </html>
