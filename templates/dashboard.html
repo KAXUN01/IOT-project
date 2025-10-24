@@ -222,13 +222,80 @@
             border-radius: 8px;
             margin-bottom: 1rem;
             display: flex;
-            align-items: center;
+            flex-direction: column;
             gap: 0.5rem;
+            border-left: 4px solid transparent;
         }
 
-        .alert.success { background: rgba(46, 125, 50, 0.1); color: #4caf50; }
-        .alert.warning { background: rgba(237, 108, 2, 0.1); color: #ff9800; }
-        .alert.danger { background: rgba(211, 47, 47, 0.1); color: #f44336; }
+        .alert.success { 
+            background: rgba(46, 125, 50, 0.1); 
+            color: #4caf50;
+            border-left-color: #4caf50;
+        }
+        
+        .alert.warning { 
+            background: rgba(237, 108, 2, 0.1); 
+            color: #ff9800;
+            border-left-color: #ff9800;
+        }
+        
+        .alert.danger { 
+            background: rgba(211, 47, 47, 0.1); 
+            color: #f44336;
+            border-left-color: #f44336;
+        }
+
+        .alert.high { 
+            background: rgba(211, 47, 47, 0.1);
+            color: #f44336;
+            border-left-color: #f44336;
+        }
+
+        .alert.medium { 
+            background: rgba(237, 108, 2, 0.1);
+            color: #ff9800;
+            border-left-color: #ff9800;
+        }
+
+        .alert.low { 
+            background: rgba(46, 125, 50, 0.1);
+            color: #4caf50;
+            border-left-color: #4caf50;
+        }
+
+        .alert-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.875rem;
+        }
+
+        .alert-severity {
+            font-weight: 600;
+        }
+
+        .alert-timestamp {
+            color: var(--text-secondary);
+        }
+
+        .alert-message {
+            font-size: 0.9375rem;
+        }
+
+        .alert-device {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        .log-timestamp {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.25rem;
+        }
+
+        .log-message {
+            font-size: 0.9375rem;
+        }
 
         .policy-toggle {
             display: flex;
@@ -416,25 +483,60 @@
                 <div class="card">
                     <h3>Security Policies</h3>
                     <div class="policy-toggle">
-                        <span>Packet Inspection</span>
-                        <button class="button button-primary" onclick="togglePolicy('packet_inspection')" id="packet-inspection-btn">Enable</button>
+                        <div class="policy-info">
+                            <span class="policy-name">Packet Inspection</span>
+                            <span class="policy-description">Deep packet inspection for threat detection</span>
+                        </div>
+                        <div class="policy-controls">
+                            <span class="status-indicator" id="packet-inspection-status">Inactive</span>
+                            <button class="button button-primary" onclick="togglePolicy('packet_inspection')" id="packet-inspection-btn">Enable</button>
+                        </div>
                     </div>
                     <div class="policy-toggle">
-                        <span>Traffic Shaping</span>
-                        <button class="button button-primary" onclick="togglePolicy('traffic_shaping')" id="traffic-shaping-btn">Enable</button>
+                        <div class="policy-info">
+                            <span class="policy-name">Traffic Shaping</span>
+                            <span class="policy-description">Bandwidth control and QoS management</span>
+                        </div>
+                        <div class="policy-controls">
+                            <span class="status-indicator" id="traffic-shaping-status">Inactive</span>
+                            <button class="button button-primary" onclick="togglePolicy('traffic_shaping')" id="traffic-shaping-btn">Enable</button>
+                        </div>
                     </div>
                     <div class="policy-toggle">
-                        <span>Dynamic Routing</span>
-                        <button class="button button-primary" onclick="togglePolicy('dynamic_routing')" id="dynamic-routing-btn">Enable</button>
+                        <div class="policy-info">
+                            <span class="policy-name">Dynamic Routing</span>
+                            <span class="policy-description">Adaptive network path optimization</span>
+                        </div>
+                        <div class="policy-controls">
+                            <span class="status-indicator" id="dynamic-routing-status">Inactive</span>
+                            <button class="button button-primary" onclick="togglePolicy('dynamic_routing')" id="dynamic-routing-btn">Enable</button>
+                        </div>
                     </div>
                 </div>
                 <div class="card">
                     <h3>Recent Alerts</h3>
-                    <div id="security-alerts" class="scroll-container"></div>
+                    <div id="security-alerts" class="scroll-container">
+                        <div class="alert-filters">
+                            <button class="filter-btn active" data-severity="all">All</button>
+                            <button class="filter-btn" data-severity="high">High</button>
+                            <button class="filter-btn" data-severity="medium">Medium</button>
+                            <button class="filter-btn" data-severity="low">Low</button>
+                        </div>
+                        <div class="alerts-list"></div>
+                    </div>
                 </div>
             </div>
             <div class="card">
                 <h3>Policy Logs</h3>
+                <div class="policy-logs-header">
+                    <div class="search-box">
+                        <input type="text" id="log-search" placeholder="Search logs...">
+                    </div>
+                    <div class="log-controls">
+                        <button class="button button-primary" onclick="clearLogs()">Clear Logs</button>
+                        <button class="button button-primary" onclick="exportLogs()">Export Logs</button>
+                    </div>
+                </div>
                 <div id="policy-logs" class="scroll-container"></div>
             </div>
         </section>
@@ -500,7 +602,19 @@
                         color: '#ffffff'
                     },
                     borderWidth: 2,
-                    shadow: true
+                    shadow: true,
+                    color: {
+                        border: '#2e7d32',
+                        background: '#4caf50',
+                        highlight: {
+                            border: '#2e7d32',
+                            background: '#66bb6a'
+                        },
+                        hover: {
+                            border: '#2e7d32',
+                            background: '#66bb6a'
+                        }
+                    }
                 },
                 edges: {
                     width: 2,
@@ -520,6 +634,36 @@
                         gravitationalConstant: -80000,
                         springConstant: 0.001,
                         springLength: 200
+                    }
+                },
+                groups: {
+                    active: {
+                        color: {
+                            border: '#2e7d32',
+                            background: '#4caf50',
+                            highlight: {
+                                border: '#2e7d32',
+                                background: '#66bb6a'
+                            },
+                            hover: {
+                                border: '#2e7d32',
+                                background: '#66bb6a'
+                            }
+                        }
+                    },
+                    inactive: {
+                        color: {
+                            border: '#b71c1c',
+                            background: '#f44336',
+                            highlight: {
+                                border: '#b71c1c',
+                                background: '#ef5350'
+                            },
+                            hover: {
+                                border: '#b71c1c',
+                                background: '#ef5350'
+                            }
+                        }
                     }
                 }
             };
@@ -546,9 +690,11 @@
                 .then(response => response.json())
                 .then(data => updateHealthMetrics(data));
 
-            fetch('/get_policy_logs')
-                .then(response => response.json())
-                .then(data => updatePolicyLogs(data));
+            // Update security section if active
+            if (document.getElementById('security').classList.contains('active')) {
+                updatePolicyLogs();
+                updateSecurityAlerts();
+            }
 
             if (document.getElementById('ml-engine').classList.contains('active')) {
                 updateMLMetrics();
@@ -577,8 +723,16 @@
         }
 
         function updateTopology(data) {
+            // Process nodes to add group based on status
+            const nodes = data.nodes.map(node => ({
+                ...node,
+                group: node.status === 'active' ? 'active' : 'inactive',
+                title: `${node.label}<br>Status: ${node.status}`,
+                size: node.type === 'gateway' ? 40 : 30 // Make gateway node larger
+            }));
+
             network.setData({
-                nodes: new vis.DataSet(data.nodes),
+                nodes: new vis.DataSet(nodes),
                 edges: new vis.DataSet(data.edges)
             });
         }
@@ -590,13 +744,80 @@
             healthBar.style.width = `${avgHealth}%`;
         }
 
-        function updatePolicyLogs(logs) {
-            const container = document.getElementById('policy-logs');
-            container.innerHTML = logs.map(log => `
-                <div class="alert">
-                    <span>${log}</span>
-                </div>
-            `).join('');
+        function updatePolicyLogs() {
+            fetch('/get_policy_logs')
+                .then(response => response.json())
+                .then(logs => {
+                    const container = document.getElementById('policy-logs');
+                    const searchTerm = document.getElementById('log-search').value.toLowerCase();
+                    
+                    const filteredLogs = logs.filter(log => 
+                        searchTerm ? log.toLowerCase().includes(searchTerm) : true
+                    );
+
+                    container.innerHTML = filteredLogs.map(log => {
+                        const timestamp = new Date().toLocaleTimeString();
+                        return `
+                            <div class="alert">
+                                <div class="log-timestamp">${timestamp}</div>
+                                <span class="log-message">${log}</span>
+                            </div>
+                        `;
+                    }).join('');
+                    
+                    container.scrollTop = container.scrollHeight;
+                });
+        }
+
+        function clearLogs() {
+            fetch('/clear_policy_logs', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('policy-logs').innerHTML = '';
+                    showAlert('Policy logs cleared', 'success');
+                });
+        }
+
+        function exportLogs() {
+            fetch('/get_policy_logs')
+                .then(response => response.json())
+                .then(logs => {
+                    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+                    const filename = `policy-logs-${timestamp}.txt`;
+                    const content = logs.join('\\n');
+                    
+                    const element = document.createElement('a');
+                    element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(content));
+                    element.setAttribute('download', filename);
+                    element.style.display = 'none';
+                    document.body.appendChild(element);
+                    element.click();
+                    document.body.removeChild(element);
+                });
+        }
+
+        function updateSecurityAlerts() {
+            fetch('/get_security_alerts')
+                .then(response => response.json())
+                .then(alerts => {
+                    const container = document.querySelector('#security-alerts .alerts-list');
+                    const activeFilter = document.querySelector('.filter-btn.active').dataset.severity;
+                    
+                    const filteredAlerts = alerts.filter(alert => 
+                        activeFilter === 'all' || alert.severity === activeFilter
+                    );
+
+                    container.innerHTML = filteredAlerts.map(alert => `
+                        <div class="alert ${alert.severity}">
+                            <div class="alert-header">
+                                <span class="alert-severity">${alert.severity.toUpperCase()}</span>
+                                <span class="alert-timestamp">${new Date(alert.timestamp).toLocaleTimeString()}</span>
+                            </div>
+                            <div class="alert-message">${alert.message}</div>
+                            ${alert.device ? `<div class="alert-device">Device: ${alert.device}</div>` : ''}
+                        </div>
+                    `).join('');
+                });
         }
 
         // Security Functions
@@ -605,11 +826,20 @@
                 .then(response => response.json())
                 .then(data => {
                     const btn = document.getElementById(`${policy.replace('_', '-')}-btn`);
+                    const statusIndicator = document.getElementById(`${policy.replace('_', '-')}-status`);
+                    
                     if (btn) {
                         btn.textContent = data.enabled ? 'Disable' : 'Enable';
                         btn.className = `button ${data.enabled ? 'button-danger' : 'button-primary'}`;
                     }
+                    
+                    if (statusIndicator) {
+                        statusIndicator.textContent = data.enabled ? 'Active' : 'Inactive';
+                        statusIndicator.className = `status-indicator ${data.enabled ? 'active' : ''}`;
+                    }
+
                     showAlert(`${policy.replace('_', ' ')} ${data.enabled ? 'enabled' : 'disabled'}`, 'success');
+                    updatePolicyLogs();
                 });
         }
 
