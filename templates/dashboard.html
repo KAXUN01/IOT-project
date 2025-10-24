@@ -507,6 +507,101 @@
             .metric-value {
                 font-size: 1.25rem;
             }
+
+            .search-box input {
+                padding: 0.8rem 0.8rem 0.8rem 2.5rem;
+                font-size: 0.9rem;
+            }
+
+            .search-box::before {
+                left: 0.8rem;
+                font-size: 1rem;
+            }
+
+            .search-filters {
+                gap: 0.4rem;
+            }
+
+            .search-filter {
+                padding: 0.3rem 0.6rem;
+                font-size: 0.75rem;
+            }
+        }
+
+        /* Search Box Styles */
+        .search-box {
+            margin-bottom: 1.5rem;
+            position: relative;
+            width: 100%;
+        }
+
+        .search-box input {
+            width: 100%;
+            padding: 1rem 1rem 1rem 3rem;
+            border-radius: 12px;
+            border: 2px solid var(--border-color);
+            background: var(--secondary-bg);
+            color: var(--text-primary);
+            font-size: 0.95rem;
+            font-family: 'Inter', sans-serif;
+            transition: all var(--transition-normal);
+        }
+
+        .search-box::before {
+            content: '🔍';
+            position: absolute;
+            left: 1rem;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 1.2rem;
+            opacity: 0.7;
+            pointer-events: none;
+            transition: all var(--transition-normal);
+        }
+
+        .search-box input:focus {
+            outline: none;
+            border-color: var(--accent-color);
+            box-shadow: 0 0 0 3px rgba(51, 153, 255, 0.1);
+        }
+
+        .search-box input:hover {
+            border-color: var(--accent-color);
+        }
+
+        .search-box input::placeholder {
+            color: var(--text-secondary);
+            opacity: 0.7;
+        }
+
+        .search-filters {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 0.75rem;
+            flex-wrap: wrap;
+        }
+
+        .search-filter {
+            padding: 0.4rem 0.8rem;
+            border-radius: 1rem;
+            background: var(--secondary-bg);
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: all var(--transition-normal);
+            user-select: none;
+        }
+
+        .search-filter:hover {
+            border-color: var(--accent-color);
+            color: var(--text-primary);
+        }
+
+        .search-filter.active {
+            background: var(--accent-color);
+            color: var(--text-primary);
+            border-color: var(--accent-color);
         }
     </style>
     <script src="static/vis-network.min.js"></script>
@@ -847,7 +942,54 @@
                 nodes: new vis.DataSet(nodes),
                 edges: new vis.DataSet(data.edges)
             });
-        }
+            function updateTopology(data) {
+                // Process nodes to add group based on status and connection state
+                const nodes = data.nodes.map(node => {
+                    const isConnected = data.edges.some(edge => 
+                        edge.from === node.id || edge.to === node.id
+                    );
+                    return {
+                        ...node,
+                        group: node.status === 'active' && isConnected ? 'active' : 'inactive',
+                        title: `${node.label}<br>Status: ${node.status}<br>Connection: ${isConnected ? 'Connected' : 'Disconnected'}`,
+                        size: node.type === 'gateway' ? 40 : 30,
+                        font: {
+                            size: 14,
+                            color: '#ffffff',
+                            face: 'Inter',
+                            strokeWidth: 2,
+                            strokeColor: '#000000'
+                        }
+                    };
+                });
+
+                // Create edges with custom styling
+                const edges = data.edges.map(edge => ({
+                    ...edge,
+                    color: {
+                        color: '#007FFF',
+                        highlight: '#ffffff',
+                        hover: '#ffffff',
+                        opacity: 0.8
+                    },
+                    width: 2,
+                    smooth: {
+                        type: 'continuous',
+                        roundness: 0.5
+                    },
+                    arrows: {
+                        to: {
+                            enabled: true,
+                            scaleFactor: 0.5
+                        }
+                    }
+                }));
+
+                network.setData({
+                    nodes: new vis.DataSet(nodes),
+                    edges: new vis.DataSet(edges)
+                });
+                };
 
         function updateHealthMetrics(data) {
             const healthBar = document.getElementById('system-health');
