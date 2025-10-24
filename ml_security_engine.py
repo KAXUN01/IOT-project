@@ -13,6 +13,15 @@ from datetime import datetime
 from collections import deque
 import threading
 import logging
+import os
+
+# Module-level constants for health checks
+HEALTH_CHECK_INTERVAL = 60  # seconds
+MAX_RELOAD_ATTEMPTS = 3
+INIT_TIMEOUT = 30  # seconds
+
+# Global ML engine instance placeholder (set by controller)
+ml_engine = None
 
 class MLSecurityEngine:
     def __init__(self, model_path="models/ddos_model_retrained.keras"):
@@ -22,10 +31,7 @@ class MLSecurityEngine:
         self.model = None
         self.model_path = model_path
         self.is_loaded = False
-        # Constants for health checks
-        HEALTH_CHECK_INTERVAL = 60  # seconds
-        MAX_RELOAD_ATTEMPTS = 3
-        INIT_TIMEOUT = 30  # seconds
+    # (module-level health-check constants are used)
         self.initialization_time = time.time()
         self.last_health_check = time.time()
         self.reload_attempts = 0

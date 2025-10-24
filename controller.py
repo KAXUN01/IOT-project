@@ -20,36 +20,6 @@ app = Flask(__name__)
 
 # Device authorization (static for now, can be dynamic)
 authorized_devices = {
-# ML Engine Health Check endpoint
-@app.route('/ml/health')
-def ml_health():
-    """Get ML engine health status"""
-    try:
-        global ml_engine
-        if not ml_engine:
-            return json.dumps({
-                'status': 'error',
-                'message': 'ML engine not initialized'
-            }), 503
-            
-        health_data = {
-            'status': 'healthy' if ml_engine.is_loaded else 'error',
-            'uptime': ml_engine.network_stats['uptime'],
-            'last_health_check': ml_engine.network_stats['last_health_check'],
-            'model_status': ml_engine.network_stats['model_status'],
-            'total_packets_processed': ml_engine.network_stats['total_packets'],
-            'detection_accuracy': ml_engine.network_stats['detection_accuracy']
-        }
-        
-        return json.dumps(health_data), 200 if ml_engine.is_loaded else 503
-        
-    except Exception as e:
-        app.logger.error(f"Health check error: {str(e)}")
-        return json.dumps({
-            'status': 'error',
-            'message': str(e)
-        }), 500
-
     "ESP32_2": True,
     "ESP32_3": True,
     "ESP32_4": False
@@ -88,6 +58,36 @@ sdn_metrics = {
 # Initialize ML Security Engine
 ml_engine = None
 ml_monitoring_active = False
+
+
+@app.route('/ml/health')
+def ml_health():
+    """Get ML engine health status"""
+    try:
+        global ml_engine
+        if not ml_engine:
+            return json.dumps({
+                'status': 'error',
+                'message': 'ML engine not initialized'
+            }), 503
+
+        health_data = {
+            'status': 'healthy' if getattr(ml_engine, 'is_loaded', False) else 'error',
+            'uptime': getattr(ml_engine, 'network_stats', {}).get('uptime'),
+            'last_health_check': getattr(ml_engine, 'network_stats', {}).get('last_health_check'),
+            'model_status': getattr(ml_engine, 'network_stats', {}).get('model_status'),
+            'total_packets_processed': getattr(ml_engine, 'network_stats', {}).get('total_packets'),
+            'detection_accuracy': getattr(ml_engine, 'network_stats', {}).get('detection_accuracy')
+        }
+
+        return json.dumps(health_data), 200 if getattr(ml_engine, 'is_loaded', False) else 503
+
+    except Exception as e:
+        app.logger.error(f"Health check error: {str(e)}")
+        return json.dumps({
+            'status': 'error',
+            'message': str(e)
+        }), 500
 
 def is_maintenance_window():
     current_hour = datetime.now().hour
@@ -447,58 +447,29 @@ def ml_detections():
     try:
         global ml_engine
 
-    # ML Engine Health Check endpoint
-    @app.route('/ml/health')
-    def ml_health():
-        """Get ML engine health status"""
-        try:
-            global ml_engine
-            if not ml_engine:
-                return json.dumps({
-                    'status': 'error',
-                    'message': 'ML engine not initialized'
-                }), 503
-            
-            health_data = {
-                'status': 'healthy' if ml_engine.is_loaded else 'error',
-                'uptime': ml_engine.network_stats['uptime'],
-                'last_health_check': ml_engine.network_stats['last_health_check'],
-                'model_status': ml_engine.network_stats['model_status'],
-                'total_packets_processed': ml_engine.network_stats['total_packets'],
-                'detection_accuracy': ml_engine.network_stats['detection_accuracy']
-            }
-        
-            return json.dumps(health_data), 200 if ml_engine.is_loaded else 503
-        
-        except Exception as e:
-            app.logger.error(f"Health check error: {str(e)}")
-            return json.dumps({
-                'status': 'error',
-                'message': str(e)
-            }), 500
         if not ml_engine:
             return json.dumps({'error': 'ML engine not initialized', 'status': 'error'}), 503
-        
+
         if not ml_engine.is_loaded:
             return json.dumps({'error': 'ML model not loaded', 'status': 'error'}), 503
-            
+
         detections = list(ml_engine.attack_detections)[-20:]  # Get last 20 detections
-        
+
         # Ensure all data is JSON serializable
         clean_detections = []
         for d in detections:
             clean_det = {
-                'timestamp': d['timestamp'],
-                'is_attack': bool(d['is_attack']),
-                'attack_type': str(d['attack_type']),
-                'confidence': float(d['confidence'])
+                'timestamp': d.get('timestamp'),
+                'is_attack': bool(d.get('is_attack', False)),
+                'attack_type': str(d.get('attack_type', 'Unknown')),
+                'confidence': float(d.get('confidence', 0.0))
             }
             if 'device_id' in d:
-                clean_det['device_id'] = str(d['device_id'])
+                clean_det['device_id'] = str(d.get('device_id'))
             if 'details' in d:
-                clean_det['details'] = str(d['details'])
+                clean_det['details'] = str(d.get('details'))
             clean_detections.append(clean_det)
-            
+
         return json.dumps({
             'status': 'success',
             'detections': clean_detections,
