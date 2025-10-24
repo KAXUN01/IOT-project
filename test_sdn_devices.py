@@ -65,18 +65,30 @@ class IoTDeviceSimulator:
             print(f"[{self.device_id}] Data send error: {e}")
             return False
     
-    def run_device(self, interval=5):
+    def run_device(self, interval=5, max_retries=3):
         """Run device simulation"""
         print(f"[{self.device_id}] Starting device simulation...")
         
-        # Get initial token
-        if not self.get_token():
-            print(f"[{self.device_id}] Failed to get token, stopping device")
+        retry_count = 0
+        while retry_count < max_retries:
+            if self.get_token():
+                break
+            print(f"[{self.device_id}] Retrying token request ({retry_count + 1}/{max_retries})")
+            retry_count += 1
+            time.sleep(5)  # Wait 5 seconds between retries
+        
+        if not self.token:
+            print(f"[{self.device_id}] Failed to get token after {max_retries} attempts, stopping device")
             return
         
         self.running = True
         while self.running:
-            self.send_data()
+            if not self.send_data():
+                # If data send fails, try to get a new token
+                if not self.get_token():
+                    print(f"[{self.device_id}] Token refresh failed, stopping device")
+                    self.running = False
+                    return
             time.sleep(interval)
     
     def stop_device(self):
@@ -94,7 +106,7 @@ class SDNTester:
         print("🔧 Creating SDN Test Topology...")
         
         # Create simulated IoT devices
-        device_ids = ["ESP32_2", "ESP32_3", "ESP32_4"]
+        device_ids = ["ESP32_2", "ESP32_3"]  # Removed ESP32_4 as it's not authorized
         
         for device_id in device_ids:
             device = IoTDeviceSimulator(device_id, self.controller_url)
