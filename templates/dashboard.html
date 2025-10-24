@@ -1,582 +1,705 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>IoT Security Framework - ML-Powered Dashboard</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecureIoT Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <style>
-        body {
+        :root {
+            --primary-bg: #0a1929;
+            --secondary-bg: #132f4c;
+            --accent-color: #007FFF;
+            --text-primary: #fff;
+            --text-secondary: #b2bac2;
+            --success-color: #2e7d32;
+            --warning-color: #ed6c02;
+            --danger-color: #d32f2f;
+            --card-bg: rgba(19, 47, 76, 0.4);
+            --border-color: rgba(255, 255, 255, 0.12);
+        }
+
+        * {
             margin: 0;
-            font-family: 'Arial', sans-serif;
-            background: linear-gradient(135deg, #1e1e2f 0%, #2a2a4a 100%);
-            color: #e0e0e0;
-            padding: 20px;
+            padding: 0;
+            box-sizing: border-box;
         }
-        h1, h2 {
-            color: #00d4ff;
-            text-shadow: 0 0 10px rgba(0, 212, 255, 0.5);
-            margin-bottom: 20px;
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--primary-bg);
+            color: var(--text-primary);
+            line-height: 1.5;
+            min-height: 100vh;
         }
+
         .container {
-            max-width: 1400px;
+            max-width: 1440px;
             margin: 0 auto;
+            padding: 1rem;
         }
-        .section {
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 10px;
-            padding: 20px;
-            margin-bottom: 20px;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
-            backdrop-filter: blur(5px);
+
+        .dashboard-header {
+            background: var(--secondary-bg);
+            padding: 1rem;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            backdrop-filter: blur(10px);
         }
-        .section h2 {
-            margin-top: 0;
+
+        .dashboard-header h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
         }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            background: rgba(255, 255, 255, 0.1);
+
+        .tab-navigation {
+            display: flex;
+            gap: 0.5rem;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none;
+            margin-bottom: 1rem;
         }
-        th, td {
-            padding: 12px;
-            text-align: center;
-            border: 1px solid rgba(255, 255, 255, 0.2);
+
+        .tab-navigation::-webkit-scrollbar {
+            display: none;
         }
-        th {
-            background: linear-gradient(45deg, #00d4ff, #007bff);
-            color: #fff;
-        }
-        td {
-            background: rgba(255, 255, 255, 0.05);
-        }
-        .authorized {
-            background: rgba(0, 255, 144, 0.2);
-            color: #00ff90;
-        }
-        .unauthorized {
-            background: rgba(255, 99, 71, 0.2);
-            color: #ff6347;
-        }
-        button {
-            padding: 8px 16px;
+
+        .tab-button {
+            padding: 0.75rem 1.5rem;
+            background: transparent;
             border: none;
-            border-radius: 5px;
+            color: var(--text-secondary);
             cursor: pointer;
-            background: linear-gradient(45deg, #00d4ff, #007bff);
-            color: #fff;
-            transition: transform 0.1s, box-shadow 0.2s;
+            white-space: nowrap;
+            transition: all 0.3s ease;
+            border-radius: 8px;
+            font-family: 'Inter', sans-serif;
         }
-        button:hover {
-            transform: scale(1.05);
-            box-shadow: 0 0 10px rgba(0, 212, 255, 0.5);
+
+        .tab-button.active {
+            background: var(--accent-color);
+            color: var(--text-primary);
         }
-        #network {
-            width: 100%;
-            height: 500px;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            border-radius: 10px;
+
+        .tab-content {
+            display: none;
+            animation: fadeIn 0.3s ease;
         }
-        .legend {
-            margin: 10px 0;
-            font-size: 14px;
+
+        .tab-content.active {
+            display: block;
         }
-        .legend span {
-            display: inline-block;
-            width: 20px;
-            height: 20px;
-            vertical-align: middle;
-            margin-right: 5px;
-        }
-        .graph-container {
-            text-align: center;
-        }
-        .graph-container img {
-            border-radius: 10px;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
-        }
-        .packet-counter {
-            text-align: center;
-            font-size: 24px;
-            margin: 20px 0;
-            color: #00ff90;
-            text-shadow: 0 0 10px rgba(0, 255, 144, 0.5);
-        }
-        .health-metrics, .policy-controls, .sdn-metrics {
+
+        .grid-container {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 20px;
+            gap: 1rem;
+            margin-bottom: 1rem;
         }
-        .metric-card, .policy-card, .sdn-metric {
-            background: rgba(255, 255, 255, 0.1);
-            padding: 15px;
-            border-radius: 8px;
-            text-align: center;
+
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1.5rem;
+            backdrop-filter: blur(10px);
+            transition: transform 0.3s ease;
         }
-        .metric-card h3, .policy-card h3, .sdn-metric h3 {
-            margin: 0 0 10px;
-            color: #00d4ff;
+
+        .card:hover {
+            transform: translateY(-2px);
         }
-        .metric-bar {
-            height: 10px;
-            background: #444;
-            border-radius: 5px;
+
+        .card h3 {
+            font-size: 1.1rem;
+            margin-bottom: 1rem;
+            color: var(--text-primary);
+        }
+
+        .metric-value {
+            font-size: 2rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: var(--accent-color);
+            font-feature-settings: "tnum";
+            font-variant-numeric: tabular-nums;
+        }
+
+        .metric-label {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 6px;
+            background: var(--secondary-bg);
+            border-radius: 3px;
+            margin: 0.5rem 0;
             overflow: hidden;
         }
-        .metric-bar div {
+
+        .progress-bar div {
             height: 100%;
-            background: linear-gradient(90deg, #00d4ff, #007bff);
-            transition: width 0.5s ease;
+            background: var(--accent-color);
+            transition: width 0.3s ease;
         }
-        .policy-logs {
-            max-height: 200px;
-            overflow-y: auto;
-            background: rgba(255, 255, 255, 0.05);
-            padding: 10px;
-            border-radius: 5px;
+
+        .network-topology {
+            height: 500px;
+            background: var(--card-bg);
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            margin-top: 1rem;
         }
-        .policy-logs p {
-            margin: 5px 0;
-            font-size: 14px;
+
+        .device-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1rem 0;
         }
-        .ml-section {
-            background: linear-gradient(135deg, #2d1b69 0%, #11998e 100%);
-            border: 2px solid #00d4ff;
+
+        .device-table th,
+        .device-table td {
+            padding: 1rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
         }
-        .ml-metric {
-            display: inline-block;
-            margin: 10px;
-            padding: 15px;
-            background: rgba(0, 0, 0, 0.3);
+
+        .device-table th {
+            background: var(--secondary-bg);
+            font-weight: 500;
+            color: var(--text-secondary);
+        }
+
+        .status-badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 1rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+
+        .status-badge.authorized {
+            background: rgba(46, 125, 50, 0.1);
+            color: #4caf50;
+        }
+
+        .status-badge.unauthorized {
+            background: rgba(211, 47, 47, 0.1);
+            color: #f44336;
+        }
+
+        .button {
+            padding: 0.75rem 1.5rem;
+            border: none;
             border-radius: 8px;
-            text-align: center;
-            min-width: 120px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            font-family: 'Inter', sans-serif;
         }
-        .ml-metric-value {
-            font-size: 24px;
-            font-weight: bold;
-            color: #00d4ff;
+
+        .button-primary {
+            background: var(--accent-color);
+            color: var(--text-primary);
         }
-        .ml-metric-label {
-            font-size: 12px;
-            color: #ccc;
-            margin-top: 5px;
+
+        .button-danger {
+            background: var(--danger-color);
+            color: var(--text-primary);
         }
-        .attack-alert {
-            background: linear-gradient(45deg, #ff6b6b, #ee5a24);
-            border: 2px solid #ff3838;
-            animation: alertPulse 2s infinite;
+
+        .button:hover {
+            filter: brightness(1.1);
+            transform: translateY(-1px);
         }
-        @keyframes alertPulse {
-            0% { box-shadow: 0 0 0 0 rgba(255, 56, 56, 0.7); }
-            70% { box-shadow: 0 0 0 10px rgba(255, 56, 56, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(255, 56, 56, 0); }
+
+        .alert {
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .alert.success { background: rgba(46, 125, 50, 0.1); color: #4caf50; }
+        .alert.warning { background: rgba(237, 108, 2, 0.1); color: #ff9800; }
+        .alert.danger { background: rgba(211, 47, 47, 0.1); color: #f44336; }
+
+        .policy-toggle {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 1rem;
+            background: var(--secondary-bg);
+            border-radius: 8px;
+            margin-bottom: 1rem;
+        }
+
+        .policy-toggle span {
+            font-weight: 500;
+        }
+
+        .scroll-container {
+            max-height: 400px;
+            overflow-y: auto;
+            scrollbar-width: thin;
+            scrollbar-color: var(--accent-color) var(--secondary-bg);
+        }
+
+        .scroll-container::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .scroll-container::-webkit-scrollbar-track {
+            background: var(--secondary-bg);
+            border-radius: 3px;
+        }
+
+        .scroll-container::-webkit-scrollbar-thumb {
+            background: var(--accent-color);
+            border-radius: 3px;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 0.5rem;
+            }
+
+            .grid-container {
+                grid-template-columns: 1fr;
+            }
+
+            .network-topology {
+                height: 300px;
+            }
+
+            .device-table {
+                display: block;
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+
+            .tab-button {
+                padding: 0.5rem 1rem;
+                font-size: 0.9rem;
+            }
+
+            .card {
+                padding: 1rem;
+            }
+
+            .metric-value {
+                font-size: 1.5rem;
+            }
+
+            .policy-toggle {
+                flex-direction: column;
+                gap: 0.5rem;
+                align-items: stretch;
+                text-align: center;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .dashboard-header h1 {
+                font-size: 1.2rem;
+            }
+
+            .tab-button {
+                padding: 0.4rem 0.8rem;
+                font-size: 0.8rem;
+            }
+
+            .button {
+                width: 100%;
+                margin-bottom: 0.5rem;
+            }
+
+            .metric-value {
+                font-size: 1.25rem;
+            }
         }
     </style>
-    <script src="static\vis-network.min.js"></script>
+    <script src="static/vis-network.min.js"></script>
 </head>
 <body>
-    <div class="container">
-        <h1>SDN IoT Advanced Dashboard</h1>
+    <header class="dashboard-header">
+        <h1>SecureIoT Command Center</h1>
+        <nav class="tab-navigation">
+            <button class="tab-button active" data-tab="overview">Overview</button>
+            <button class="tab-button" data-tab="devices">Devices</button>
+            <button class="tab-button" data-tab="security">Security</button>
+            <button class="tab-button" data-tab="ml-engine">ML Engine</button>
+            <button class="tab-button" data-tab="analytics">Analytics</button>
+        </nav>
+    </header>
 
-        <div class="section">
-            <h2>Device Overview</h2>
-            <table>
-                <tr>
-                    <th>Device ID</th>
-                    <th>Status</th>
-                    <th>Packets Received</th>
-                    <th>Rate Limit Status</th>
-                    <th>Blocked Reason</th>
-                    <th>Action</th>
-                </tr>
-                {% for device, authorized in devices.items() %}
-                <tr>
-                    <td>{{ device }}</td>
-                    <td class="{{ 'authorized' if authorized else 'unauthorized' }}">
-                        {{ 'Authorized' if authorized else 'Unauthorized' }}
-                    </td>
-                    <td id="packets-{{ device }}">{{ data[device] }}</td>
-                    <td id="rate-limit-{{ device }}">0/60</td>
-                    <td id="blocked-reason-{{ device }}">-</td>
-                    <td>
-                        <form method="POST" action="/update">
-                            <input type="hidden" name="device_id" value="{{ device }}">
-                            <button type="submit" name="action" value="{{ 'revoke' if authorized else 'authorize' }}">
-                                {{ 'Revoke' if authorized else 'Authorize' }}
-                            </button>
-                        </form>
-                    </td>
-                </tr>
-                {% endfor %}
-            </table>
-        </div>
-
-        <div class="section packet-counter">
-            Total Packets Received: <span id="total-packets">0</span>
-        </div>
-
-        <div class="section">
-            <h2>Network Topology</h2>
-            <div class="legend">
-                <span style="background-color: #90ee90;"></span> Online
-                <span style="background-color: #ffcccb; margin-left: 20px;"></span> Offline
-            </div>
-            <div id="network"></div>
-        </div>
-
-        <div class="section graph-container">
-            <h2>Packets Received Over Time</h2>
-            <img src="/graph" id="graph" onload="setTimeout(() => this.src='/graph?'+Date.now(), 5000)">
-        </div>
-
-        <div class="section">
-            <h2>Device Health Metrics</h2>
-            <div class="health-metrics" id="health-metrics"></div>
-        </div>
-
-        <div class="section">
-            <h2>SDN Policy Controls</h2>
-            <div class="policy-controls">
-                <div class="policy-card">
-                    <h3>Packet Inspection</h3>
-                    <form method="POST" action="/update_policy">
-                        <input type="hidden" name="policy" value="packet_inspection">
-                        <button type="submit" name="action" value="enable">Enable</button>
-                        <button type="submit" name="action" value="disable">Disable</button>
-                    </form>
+    <main class="container">
+        <!-- Overview Tab -->
+        <section id="overview" class="tab-content active">
+            <div class="grid-container">
+                <div class="card">
+                    <h3>Network Status</h3>
+                    <div class="metric-value" id="total-devices">0</div>
+                    <div class="metric-label">Active Devices</div>
                 </div>
-                <div class="policy-card">
-                    <h3>Traffic Shaping</h3>
-                    <form method="POST" action="/update_policy">
-                        <input type="hidden" name="policy" value="traffic_shaping">
-                        <button type="submit" name="action" value="enable">Enable</button>
-                        <button type="submit" name="action" value="disable">Disable</button>
-                    </form>
+                <div class="card">
+                    <h3>Network Traffic</h3>
+                    <div class="metric-value" id="total-packets">0</div>
+                    <div class="metric-label">Packets/Minute</div>
                 </div>
-                <div class="policy-card">
-                    <h3>Dynamic Routing</h3>
-                    <form method="POST" action="/update_policy">
-                        <input type="hidden" name="policy" value="dynamic_routing">
-                        <button type="submit" name="action" value="enable">Enable</button>
-                        <button type="submit" name="action" value="disable">Disable</button>
-                    </form>
+                <div class="card">
+                    <h3>System Health</h3>
+                    <div class="progress-bar">
+                        <div id="system-health" style="width: 85%"></div>
+                    </div>
+                    <div class="metric-label">System Performance</div>
                 </div>
             </div>
-        </div>
+            <div class="network-topology" id="network-visualization"></div>
+        </section>
 
-        <div class="section">
-            <h2>Policy Enforcement Logs</h2>
-            <div class="policy-logs" id="policy-logs"></div>
-        </div>
-
-        <div class="section">
-            <h2>SDN Metrics</h2>
-            <div class="sdn-metrics" id="sdn-metrics"></div>
-        </div>
-
-        <!-- ML Security Engine Section -->
-        <div class="section ml-section">
-            <h2>🤖 ML Security Engine - DDoS Attack Detection</h2>
-            <div style="margin-bottom: 20px;">
-                <button onclick="initializeML()" style="background: linear-gradient(45deg, #00d4ff, #007bff); color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; margin-right: 10px;">
-                    Initialize ML Engine
-                </button>
-                <button onclick="toggleMLMonitoring()" style="background: linear-gradient(45deg, #28a745, #20c997); color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer;">
-                    Toggle Monitoring
-                </button>
-            </div>
-            
-            <div id="ml-status" style="margin-bottom: 20px;">
-                <p>ML Engine Status: <span id="ml-status-text">Not Initialized</span></p>
-            </div>
-            
-            <div id="ml-metrics" style="display: flex; flex-wrap: wrap; justify-content: center;">
-                <!-- ML metrics will be populated here -->
-            </div>
-            
-            <div style="margin-top: 20px;">
-                <h3>Recent Attack Detections</h3>
-                <div id="ml-detections" style="max-height: 200px; overflow-y: auto; background: rgba(0, 0, 0, 0.3); padding: 10px; border-radius: 5px;">
-                    <!-- Attack detections will be populated here -->
+        <!-- Devices Tab -->
+        <section id="devices" class="tab-content">
+            <div class="card">
+                <h3>Connected Devices</h3>
+                <div class="scroll-container">
+                    <table class="device-table">
+                        <thead>
+                            <tr>
+                                <th>Device ID</th>
+                                <th>Status</th>
+                                <th>Packets</th>
+                                <th>Rate Limit</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="device-list">
+                            {% for device, authorized in devices.items() %}
+                            <tr>
+                                <td>{{ device }}</td>
+                                <td><span class="status-badge {{ 'authorized' if authorized else 'unauthorized' }}">
+                                    {{ 'Authorized' if authorized else 'Unauthorized' }}
+                                </span></td>
+                                <td id="packets-{{ device }}">{{ data[device] }}</td>
+                                <td id="rate-limit-{{ device }}">0/60</td>
+                                <td>
+                                    <form method="POST" action="/update" style="display: inline;">
+                                        <input type="hidden" name="device_id" value="{{ device }}">
+                                        <input type="hidden" name="action" value="{{ 'revoke' if authorized else 'authorize' }}">
+                                        <button type="submit" class="button {{ 'button-danger' if authorized else 'button-primary' }}">
+                                            {{ 'Revoke' if authorized else 'Authorize' }}
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
                 </div>
             </div>
-        </div>
-    </div>
+        </section>
+
+        <!-- Security Tab -->
+        <section id="security" class="tab-content">
+            <div class="grid-container">
+                <div class="card">
+                    <h3>Security Policies</h3>
+                    <div class="policy-toggle">
+                        <span>Packet Inspection</span>
+                        <button class="button button-primary" onclick="togglePolicy('packet_inspection')" id="packet-inspection-btn">Enable</button>
+                    </div>
+                    <div class="policy-toggle">
+                        <span>Traffic Shaping</span>
+                        <button class="button button-primary" onclick="togglePolicy('traffic_shaping')" id="traffic-shaping-btn">Enable</button>
+                    </div>
+                    <div class="policy-toggle">
+                        <span>Dynamic Routing</span>
+                        <button class="button button-primary" onclick="togglePolicy('dynamic_routing')" id="dynamic-routing-btn">Enable</button>
+                    </div>
+                </div>
+                <div class="card">
+                    <h3>Recent Alerts</h3>
+                    <div id="security-alerts" class="scroll-container"></div>
+                </div>
+            </div>
+            <div class="card">
+                <h3>Policy Logs</h3>
+                <div id="policy-logs" class="scroll-container"></div>
+            </div>
+        </section>
+
+        <!-- ML Engine Tab -->
+        <section id="ml-engine" class="tab-content">
+            <div class="card">
+                <h3>ML Engine Status</h3>
+                <div class="grid-container">
+                    <div id="ml-metrics"></div>
+                </div>
+                <div style="margin-top: 1rem;">
+                    <button class="button button-primary" onclick="initializeML()">Initialize ML Engine</button>
+                    <button class="button button-primary" onclick="toggleMLMonitoring()">Toggle Monitoring</button>
+                </div>
+            </div>
+            <div class="card">
+                <h3>Attack Detection Log</h3>
+                <div id="ml-detections" class="scroll-container"></div>
+            </div>
+        </section>
+
+        <!-- Analytics Tab -->
+        <section id="analytics" class="tab-content">
+            <div class="grid-container">
+                <div class="card">
+                    <h3>Network Performance</h3>
+                    <div id="network-analytics" class="metric-value"></div>
+                </div>
+                <div class="card">
+                    <h3>System Metrics</h3>
+                    <div id="system-metrics" class="metric-value"></div>
+                </div>
+            </div>
+            <div class="card">
+                <h3>Traffic Analysis</h3>
+                <div id="traffic-analysis" class="scroll-container"></div>
+            </div>
+        </section>
+    </main>
 
     <script>
-        let totalPackets = 0;
+        // Tab Navigation
+        document.querySelectorAll('.tab-button').forEach(button => {
+            button.addEventListener('click', () => {
+                document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+                
+                button.classList.add('active');
+                document.getElementById(button.dataset.tab).classList.add('active');
+            });
+        });
 
-        function updatePacketCounts() {
+        // Network Visualization
+        function initializeNetwork() {
+            const container = document.getElementById('network-visualization');
+            const options = {
+                nodes: {
+                    shape: 'dot',
+                    size: 30,
+                    font: {
+                        size: 14,
+                        color: '#ffffff'
+                    },
+                    borderWidth: 2,
+                    shadow: true
+                },
+                edges: {
+                    width: 2,
+                    color: {
+                        color: '#007FFF',
+                        highlight: '#ffffff',
+                        hover: '#ffffff',
+                        opacity: 0.8
+                    },
+                    smooth: {
+                        type: 'continuous'
+                    }
+                },
+                physics: {
+                    stabilization: false,
+                    barnesHut: {
+                        gravitationalConstant: -80000,
+                        springConstant: 0.001,
+                        springLength: 200
+                    }
+                }
+            };
+
+            return new vis.Network(container, { nodes: new vis.DataSet(), edges: new vis.DataSet() }, options);
+        }
+
+        let network = initializeNetwork();
+
+        // Data Updates
+        function updateData() {
             fetch('/get_data')
                 .then(response => response.json())
                 .then(data => {
-                    let newTotal = 0;
-                    for (const device in data) {
-                        const packetsEl = document.getElementById(`packets-${device}`);
-                        const rateLimitEl = document.getElementById(`rate-limit-${device}`);
-                        const blockedReasonEl = document.getElementById(`blocked-reason-${device}`);
-                        if (packetsEl) packetsEl.textContent = data[device].packets;
-                        if (rateLimitEl) rateLimitEl.textContent = data[device].rate_limit_status;
-                        if (blockedReasonEl) blockedReasonEl.textContent = data[device].blocked_reason || '-';
-                        newTotal += data[device].packets;
-                    }
-                    animatePacketCounter(newTotal);
-                })
-                .catch(error => console.error('Error fetching data:', error));
-        }
+                    updateDeviceMetrics(data);
+                    updateDeviceTable(data);
+                });
 
-        function animatePacketCounter(newTotal) {
-            const counter = document.getElementById('total-packets');
-            const start = totalPackets;
-            const end = newTotal;
-            const duration = 1000;
-            let startTime = null;
-
-            function step(timestamp) {
-                if (!startTime) startTime = timestamp;
-                const progress = Math.min((timestamp - startTime) / duration, 1);
-                const current = Math.floor(start + (end - start) * progress);
-                counter.textContent = current;
-                if (progress < 1) {
-                    requestAnimationFrame(step);
-                } else {
-                    totalPackets = end;
-                }
-            }
-            requestAnimationFrame(step);
-        }
-
-        function updateTopology() {
             fetch('/get_topology_with_mac')
                 .then(response => response.json())
-                .then(data => {
-                    const nodes = new vis.DataSet(data.nodes.map(node => ({
-                        id: node.id,
-                        label: `${node.label}\n${node.mac}\n${node.online ? 'Online' : 'Offline'}`,
-                        title: `Last Seen: ${new Date(node.last_seen * 1000).toLocaleTimeString()}\nPackets: ${node.packets}`,
-                        color: node.online ? '#90ee90' : '#ffcccb',
-                        font: { multi: true, size: 12 }
-                    })));
-                    
-                    const edges = new vis.DataSet(data.edges.map(edge => ({
-                        from: edge.from,
-                        to: edge.to,
-                        color: { color: '#848484' },
-                        dashes: true,
-                        arrows: 'to'
-                    })));
-                    
-                    const container = document.getElementById('network');
-                    const networkData = { nodes: nodes, edges: edges };
-                    const options = {
-                        nodes: {
-                            shape: 'dot',
-                            size: 30,
-                            font: { size: 12, multi: true, align: 'center' }
-                        },
-                        edges: {
-                            width: 2
-                        },
-                        physics: {
-                            enabled: true,
-                            stabilization: true,
-                            barnesHut: {
-                                gravitationalConstant: -3000,
-                                springLength: 150
-                            }
-                        }
-                    };
-                    const network = new vis.Network(container, networkData, options);
-                })
-                .catch(error => console.error('Error fetching topology:', error));
-        }
+                .then(data => updateTopology(data));
 
-        function updateHealthMetrics() {
             fetch('/get_health_metrics')
                 .then(response => response.json())
-                .then(data => {
-                    const container = document.getElementById('health-metrics');
-                    container.innerHTML = '';
-                    for (const device in data) {
-                        const metrics = data[device];
-                        const card = document.createElement('div');
-                        card.className = 'metric-card';
-                        card.innerHTML = `
-                            <h3>${device}</h3>
-                            <p>CPU Usage: ${metrics.cpu_usage}%</p>
-                            <div class="metric-bar"><div style="width: ${metrics.cpu_usage}%"></div></div>
-                            <p>Memory Usage: ${metrics.memory_usage}%</p>
-                            <div class="metric-bar"><div style="width: ${metrics.memory_usage}%"></div></div>
-                            <p>Uptime: ${metrics.uptime} seconds</p>
-                        `;
-                        container.appendChild(card);
-                    }
-                })
-                .catch(error => console.error('Error fetching health metrics:', error));
-        }
+                .then(data => updateHealthMetrics(data));
 
-        function updatePolicyLogs() {
             fetch('/get_policy_logs')
                 .then(response => response.json())
-                .then(logs => {
-                    const container = document.getElementById('policy-logs');
-                    container.innerHTML = '';
-                    logs.forEach(log => {
-                        const p = document.createElement('p');
-                        p.textContent = log;
-                        container.appendChild(p);
-                    });
-                    container.scrollTop = container.scrollHeight;  // Auto-scroll to bottom
-                })
-                .catch(error => console.error('Error fetching policy logs:', error));
+                .then(data => updatePolicyLogs(data));
+
+            if (document.getElementById('ml-engine').classList.contains('active')) {
+                updateMLMetrics();
+                updateMLDetections();
+            }
+
+            if (document.getElementById('analytics').classList.contains('active')) {
+                updateAnalytics();
+            }
         }
 
-        function updateSDNMetrics() {
-            fetch('/get_sdn_metrics')
+        function updateDeviceMetrics(data) {
+            document.getElementById('total-devices').textContent = Object.keys(data).length;
+            const totalPackets = Object.values(data).reduce((sum, device) => sum + device.packets, 0);
+            document.getElementById('total-packets').textContent = totalPackets;
+        }
+
+        function updateDeviceTable(data) {
+            const tbody = document.getElementById('device-list');
+            Object.entries(data).forEach(([deviceId, info]) => {
+                const packetsEl = document.getElementById(`packets-${deviceId}`);
+                const rateLimitEl = document.getElementById(`rate-limit-${deviceId}`);
+                if (packetsEl) packetsEl.textContent = info.packets;
+                if (rateLimitEl) rateLimitEl.textContent = info.rate_limit_status;
+            });
+        }
+
+        function updateTopology(data) {
+            network.setData({
+                nodes: new vis.DataSet(data.nodes),
+                edges: new vis.DataSet(data.edges)
+            });
+        }
+
+        function updateHealthMetrics(data) {
+            const healthBar = document.getElementById('system-health');
+            const avgHealth = Object.values(data).reduce((sum, metrics) => 
+                sum + (100 - metrics.cpu_usage/2 - metrics.memory_usage/2), 0) / Object.keys(data).length;
+            healthBar.style.width = `${avgHealth}%`;
+        }
+
+        function updatePolicyLogs(logs) {
+            const container = document.getElementById('policy-logs');
+            container.innerHTML = logs.map(log => `
+                <div class="alert">
+                    <span>${log}</span>
+                </div>
+            `).join('');
+        }
+
+        // Security Functions
+        function togglePolicy(policy) {
+            fetch(`/toggle_policy/${policy}`, { method: 'POST' })
                 .then(response => response.json())
                 .then(data => {
-                    const container = document.getElementById('sdn-metrics');
-                    container.innerHTML = '';
-                    for (const [metric, value] of Object.entries(data)) {
-                        const card = document.createElement('div');
-                        card.className = 'sdn-metric';
-                        const metricName = metric.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase());
-                        card.innerHTML = `
-                            <h3>${metricName}</h3>
-                            <p>${value} ${metric.includes('latency') ? 'ms' : metric.includes('throughput') ? 'Mbps' : '%'}</p>
-                        `;
-                        container.appendChild(card);
+                    const btn = document.getElementById(`${policy.replace('_', '-')}-btn`);
+                    if (btn) {
+                        btn.textContent = data.enabled ? 'Disable' : 'Enable';
+                        btn.className = `button ${data.enabled ? 'button-danger' : 'button-primary'}`;
                     }
-                })
-                .catch(error => console.error('Error fetching SDN metrics:', error));
+                    showAlert(`${policy.replace('_', ' ')} ${data.enabled ? 'enabled' : 'disabled'}`, 'success');
+                });
         }
 
-        // ML Security Engine Functions
-        let mlEngineActive = false;
-        
+        // ML Engine Functions
         function initializeML() {
             fetch('/ml/initialize')
                 .then(response => response.json())
                 .then(data => {
                     if (data.status === 'success') {
-                        document.getElementById('ml-status-text').textContent = 'Active';
-                        document.getElementById('ml-status-text').style.color = '#00ff00';
-                        mlEngineActive = true;
+                        showAlert('ML Engine initialized successfully', 'success');
                         updateMLMetrics();
-                        updateMLDetections();
                     } else {
-                        alert('Failed to initialize ML engine: ' + data.message);
+                        showAlert('Failed to initialize ML Engine', 'danger');
                     }
-                })
-                .catch(error => {
-                    console.error('Error initializing ML:', error);
-                    alert('Error initializing ML engine');
                 });
         }
-        
-        function toggleMLMonitoring() {
-            if (mlEngineActive) {
-                mlEngineActive = false;
-                document.getElementById('ml-status-text').textContent = 'Monitoring Stopped';
-                document.getElementById('ml-status-text').style.color = '#ffaa00';
-            } else {
-                mlEngineActive = true;
-                document.getElementById('ml-status-text').textContent = 'Monitoring Active';
-                document.getElementById('ml-status-text').style.color = '#00ff00';
-            }
-        }
-        
+
         function updateMLMetrics() {
-            if (!mlEngineActive) return;
-            
-            fetch('/ml/statistics')
+            fetch('/ml/status')
                 .then(response => response.json())
                 .then(data => {
-                    if (data.error) {
-                        console.error('ML statistics error:', data.error);
-                        return;
-                    }
-                    
                     const container = document.getElementById('ml-metrics');
-                    container.innerHTML = '';
-                    
-                    // Create metric cards
-                    const metrics = [
-                        { label: 'Total Packets', value: data.total_packets || 0 },
-                        { label: 'Attack Packets', value: data.attack_packets || 0 },
-                        { label: 'Normal Packets', value: data.normal_packets || 0 },
-                        { label: 'Attack Rate', value: (data.attack_rate || 0).toFixed(2) + '%' },
-                        { label: 'Detection Accuracy', value: (data.detection_accuracy || 0).toFixed(2) + '%' },
-                        { label: 'Recent Attacks', value: data.recent_attacks || 0 }
-                    ];
-                    
-                    metrics.forEach(metric => {
-                        const card = document.createElement('div');
-                        card.className = 'ml-metric';
-                        card.innerHTML = `
-                            <div class="ml-metric-value">${metric.value}</div>
-                            <div class="ml-metric-label">${metric.label}</div>
-                        `;
-                        container.appendChild(card);
-                    });
-                })
-                .catch(error => console.error('Error fetching ML metrics:', error));
+                    container.innerHTML = `
+                        <div class="card">
+                            <h3>Detection Rate</h3>
+                            <div class="metric-value">${data.statistics.detection_rate}%</div>
+                        </div>
+                        <div class="card">
+                            <h3>False Positive Rate</h3>
+                            <div class="metric-value">${data.statistics.false_positive_rate}%</div>
+                        </div>
+                    `;
+                });
         }
-        
+
         function updateMLDetections() {
-            if (!mlEngineActive) return;
-            
             fetch('/ml/detections')
                 .then(response => response.json())
                 .then(detections => {
                     const container = document.getElementById('ml-detections');
-                    container.innerHTML = '';
-                    
-                    if (detections.length === 0) {
-                        container.innerHTML = '<p>No recent detections</p>';
-                        return;
-                    }
-                    
-                    detections.slice(-10).reverse().forEach(detection => {
-                        const div = document.createElement('div');
-                        div.style.marginBottom = '10px';
-                        div.style.padding = '8px';
-                        div.style.borderRadius = '5px';
-                        div.style.background = detection.is_attack ? 
-                            'linear-gradient(45deg, #ff6b6b, #ee5a24)' : 
-                            'rgba(0, 255, 0, 0.2)';
-                        div.style.border = detection.is_attack ? '2px solid #ff3838' : '1px solid #00ff00';
-                        
-                        const timestamp = new Date(detection.timestamp).toLocaleTimeString();
-                        const confidence = (detection.confidence * 100).toFixed(2);
-                        
-                        div.innerHTML = `
-                            <strong>${detection.attack_type}</strong> 
-                            (${confidence}% confidence) - ${timestamp}
-                            ${detection.is_attack ? ' 🚨' : ' ✅'}
-                        `;
-                        
-                        container.appendChild(div);
-                    });
-                })
-                .catch(error => console.error('Error fetching ML detections:', error));
+                    container.innerHTML = detections.map(detection => `
+                        <div class="alert ${detection.is_attack ? 'danger' : 'success'}">
+                            <strong>${detection.attack_type}</strong>
+                            <span>${new Date(detection.timestamp).toLocaleTimeString()}</span>
+                            <span>${(detection.confidence * 100).toFixed(2)}% confidence</span>
+                        </div>
+                    `).join('');
+                });
         }
 
-        setInterval(() => {
-            updatePacketCounts();
-            updateTopology();
-            updateHealthMetrics();
-            updatePolicyLogs();
-            updateSDNMetrics();
-            if (mlEngineActive) {
-                updateMLMetrics();
-                updateMLDetections();
-            }
-        }, 5000);
+        function updateAnalytics() {
+            // Placeholder for analytics implementation
+            document.getElementById('network-analytics').textContent = 'Network Load: 45%';
+            document.getElementById('system-metrics').textContent = 'Response Time: 120ms';
+            
+            const trafficAnalysis = document.getElementById('traffic-analysis');
+            trafficAnalysis.innerHTML = `
+                <div class="alert">
+                    <span>Average Packet Size: 256 bytes</span>
+                </div>
+                <div class="alert">
+                    <span>Bandwidth Usage: 2.5 Mbps</span>
+                </div>
+                <div class="alert">
+                    <span>Active Connections: 15</span>
+                </div>
+            `;
+        }
 
-        updatePacketCounts();
-        updateTopology();
-        updateHealthMetrics();
-        updatePolicyLogs();
-        updateSDNMetrics();
+        function showAlert(message, type) {
+            const alert = document.createElement('div');
+            alert.className = `alert ${type}`;
+            alert.textContent = message;
+            document.body.appendChild(alert);
+            setTimeout(() => {
+                alert.style.opacity = '0';
+                setTimeout(() => alert.remove(), 300);
+            }, 3000);
+        }
+
+        // Initialize data updates
+        updateData();
+        setInterval(updateData, 5000);
+
+        // Handle mobile responsiveness
+        window.addEventListener('resize', () => {
+            if (network) {
+                network.fit();
+            }
+        });
     </script>
 </body>
 </html>
