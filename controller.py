@@ -539,5 +539,27 @@ def ml_statistics():
     else:
         return json.dumps({'error': 'ML engine not available'})
 
+def start_ml_engine():
+    """Initialize and start the ML engine on app startup"""
+    global ml_engine, ml_monitoring_active
+    try:
+        print("🚀 Initializing ML Security Engine...")
+        ml_engine = initialize_ml_engine()
+        if ml_engine and ml_engine.is_loaded:
+            ml_monitoring_active = True
+            ml_engine.start_monitoring()
+            print("✅ ML Security Engine initialized and monitoring started")
+            return True
+        else:
+            print("❌ Failed to initialize ML engine")
+            return False
+    except Exception as e:
+        print(f"❌ ML initialization failed: {str(e)}")
+        return False
+
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    # Start ML engine before running the app
+    start_ml_engine()
+    
+    # Run the Flask app
+    app.run(host='0.0.0.0', port=5000, use_reloader=False)  # disable reloader to prevent duplicate ML engine initialization
