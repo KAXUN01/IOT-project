@@ -609,12 +609,12 @@
 <body>
     <header class="dashboard-header">
         <h1>SecureIoT Command Center</h1>
-        <nav class="tab-navigation">
-            <button class="tab-button active" data-tab="overview">Overview</button>
-            <button class="tab-button" data-tab="devices">Devices</button>
-            <button class="tab-button" data-tab="security">Security</button>
-            <button class="tab-button" data-tab="ml-engine">ML Engine</button>
-            <button class="tab-button" data-tab="analytics">Analytics</button>
+        <nav class="tab-navigation" role="tablist" aria-label="Main Navigation">
+            <button class="tab-button active" data-tab="overview" role="tab" aria-controls="overview" tabindex="0">Overview</button>
+            <button class="tab-button" data-tab="devices" role="tab" aria-controls="devices" tabindex="0">Devices</button>
+            <button class="tab-button" data-tab="security" role="tab" aria-controls="security" tabindex="0">Security</button>
+            <button class="tab-button" data-tab="ml-engine" role="tab" aria-controls="ml-engine" tabindex="0">ML Engine</button>
+            <button class="tab-button" data-tab="analytics" role="tab" aria-controls="analytics" tabindex="0">Analytics</button>
         </nav>
     </header>
 
@@ -819,16 +819,39 @@
     </main>
 
     <script>
-        // Tab Navigation
-        document.querySelectorAll('.tab-button').forEach(button => {
-            button.addEventListener('click', () => {
-                document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
-                document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
-                
-                button.classList.add('active');
-                document.getElementById(button.dataset.tab).classList.add('active');
+        // Tab Navigation (initialized on DOMContentLoaded for reliability)
+        function initTabNavigation() {
+            const tabButtons = document.querySelectorAll('.tab-button');
+            const tabContents = document.querySelectorAll('.tab-content');
+
+            function activateTab(tabButton) {
+                tabButtons.forEach(btn => btn.classList.remove('active'));
+                tabContents.forEach(c => c.classList.remove('active'));
+
+                tabButton.classList.add('active');
+                const targetId = tabButton.dataset.tab;
+                const target = document.getElementById(targetId);
+                if (target) {
+                    target.classList.add('active');
+                }
+            }
+
+            tabButtons.forEach(button => {
+                // mouse click
+                button.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    activateTab(button);
+                });
+
+                // keyboard accessibility (Enter / Space)
+                button.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        activateTab(button);
+                    }
+                });
             });
-        });
+        }
 
         // Network Visualization
         function initializeNetwork() {
@@ -1387,8 +1410,25 @@
             }
         }
 
-        // Initialize security UI once DOM is ready
-        document.addEventListener('DOMContentLoaded', initSecurityUI);
+        // Initialize UI once DOM is ready
+        document.addEventListener('DOMContentLoaded', () => {
+            try {
+                if (typeof initTabNavigation === 'function') initTabNavigation();
+            } catch (e) {
+                console.error('Tab init error', e);
+            }
+            try {
+                if (typeof initSecurityUI === 'function') initSecurityUI();
+            } catch (e) {
+                console.error('Security UI init error', e);
+            }
+            // Start ML updates if ML tab is active
+            try {
+                if (typeof mlMonitoringActive !== 'undefined' && mlMonitoringActive) startMLUpdates();
+            } catch (e) {
+                // ignore
+            }
+        });
     </script>
 </body>
 </html>
