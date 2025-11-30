@@ -1067,6 +1067,9 @@
         <nav class="tab-navigation" role="tablist" aria-label="Main Navigation">
             <button class="tab-button active" data-tab="overview" role="tab" aria-controls="overview" tabindex="0">Overview</button>
             <button class="tab-button" data-tab="devices" role="tab" aria-controls="devices" tabindex="0">Devices</button>
+            <button class="tab-button" data-tab="trust" role="tab" aria-controls="trust" tabindex="0">Trust Scores</button>
+            <button class="tab-button" data-tab="honeypot" role="tab" aria-controls="honeypot" tabindex="0">Honeypot</button>
+            <button class="tab-button" data-tab="certificates" role="tab" aria-controls="certificates" tabindex="0">Certificates</button>
             <button class="tab-button" data-tab="security" role="tab" aria-controls="security" tabindex="0">Security</button>
             <button class="tab-button" data-tab="ml-engine" role="tab" aria-controls="ml-engine" tabindex="0">ML Engine</button>
             <button class="tab-button" data-tab="analytics" role="tab" aria-controls="analytics" tabindex="0">Analytics</button>
@@ -1310,6 +1313,125 @@
             </div>
         </section>
 
+        <!-- Trust Scores Tab -->
+        <section id="trust" class="tab-content">
+            <div class="grid-container">
+                <div class="card">
+                    <h3>Average Trust Score</h3>
+                    <div class="metric-value" id="avg-trust-score">0</div>
+                    <div class="metric-label">Network Trust Level</div>
+                </div>
+                <div class="card">
+                    <h3>Trusted Devices</h3>
+                    <div class="metric-value" id="trusted-devices-count">0</div>
+                    <div class="metric-label">Score ≥ 70</div>
+                </div>
+                <div class="card">
+                    <h3>Suspicious Devices</h3>
+                    <div class="metric-value" id="suspicious-devices-count">0</div>
+                    <div class="metric-label">Score < 50</div>
+                </div>
+            </div>
+            <div class="card">
+                <h3>Device Trust Scores</h3>
+                <div class="scroll-container">
+                    <table class="device-table">
+                        <thead>
+                            <tr>
+                                <th>Device ID</th>
+                                <th>Trust Score</th>
+                                <th>Trust Level</th>
+                                <th>Status</th>
+                                <th>Last Updated</th>
+                            </tr>
+                        </thead>
+                        <tbody id="trust-scores-list"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- Honeypot Tab -->
+        <section id="honeypot" class="tab-content">
+            <div class="grid-container">
+                <div class="card">
+                    <h3>Honeypot Status</h3>
+                    <div class="metric-value" id="honeypot-status">Stopped</div>
+                    <div class="metric-label" id="honeypot-status-label">Container Status</div>
+                </div>
+                <div class="card">
+                    <h3>Threats Captured</h3>
+                    <div class="metric-value" id="threats-captured">0</div>
+                    <div class="metric-label">Total Threats</div>
+                </div>
+                <div class="card">
+                    <h3>Blocked IPs</h3>
+                    <div class="metric-value" id="blocked-ips-count">0</div>
+                    <div class="metric-label">Auto-Blocked</div>
+                </div>
+            </div>
+            <div class="card">
+                <h3>Recent Threats</h3>
+                <div class="scroll-container">
+                    <div id="recent-threats-list" class="alerts-list"></div>
+                </div>
+            </div>
+            <div class="card">
+                <h3>Mitigation Rules</h3>
+                <div class="scroll-container">
+                    <table class="device-table">
+                        <thead>
+                            <tr>
+                                <th>IP Address</th>
+                                <th>Rule Type</th>
+                                <th>Reason</th>
+                                <th>Generated At</th>
+                            </tr>
+                        </thead>
+                        <tbody id="mitigation-rules-list"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- Certificates Tab -->
+        <section id="certificates" class="tab-content">
+            <div class="grid-container">
+                <div class="card">
+                    <h3>Total Certificates</h3>
+                    <div class="metric-value" id="total-certificates">0</div>
+                    <div class="metric-label">Issued Certificates</div>
+                </div>
+                <div class="card">
+                    <h3>Valid Certificates</h3>
+                    <div class="metric-value" id="valid-certificates">0</div>
+                    <div class="metric-label">Currently Valid</div>
+                </div>
+                <div class="card">
+                    <h3>Expired Certificates</h3>
+                    <div class="metric-value" id="expired-certificates">0</div>
+                    <div class="metric-label">Require Renewal</div>
+                </div>
+            </div>
+            <div class="card">
+                <h3>Device Certificates</h3>
+                <div class="scroll-container">
+                    <table class="device-table">
+                        <thead>
+                            <tr>
+                                <th>Device ID</th>
+                                <th>MAC Address</th>
+                                <th>Certificate Status</th>
+                                <th>Valid Until</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="certificates-list"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
         <!-- Analytics Tab -->
         <section id="analytics" class="tab-content">
             <div class="grid-container">
@@ -1477,6 +1599,21 @@
 
             if (document.getElementById('analytics').classList.contains('active')) {
                 updateAnalytics();
+            }
+
+            // Update trust scores if active
+            if (document.getElementById('trust').classList.contains('active')) {
+                updateTrustScores();
+            }
+
+            // Update honeypot if active
+            if (document.getElementById('honeypot').classList.contains('active')) {
+                updateHoneypotStatus();
+            }
+
+            // Update certificates if active
+            if (document.getElementById('certificates').classList.contains('active')) {
+                updateCertificates();
             }
         }
 
@@ -1972,6 +2109,175 @@
                     <span>Active Connections: 15</span>
                 </div>
             `;
+        }
+
+        // Trust Scores Update Functions
+        function updateTrustScores() {
+            fetch('/api/trust_scores')
+                .then(response => response.json())
+                .then(data => {
+                    const scores = data.scores || {};
+                    const scoresList = Object.entries(scores);
+                    
+                    // Calculate average
+                    const avgScore = scoresList.length > 0 
+                        ? Math.round(scoresList.reduce((sum, [_, score]) => sum + score, 0) / scoresList.length)
+                        : 0;
+                    document.getElementById('avg-trust-score').textContent = avgScore;
+                    
+                    // Count trusted and suspicious devices
+                    const trusted = scoresList.filter(([_, score]) => score >= 70).length;
+                    const suspicious = scoresList.filter(([_, score]) => score < 50).length;
+                    document.getElementById('trusted-devices-count').textContent = trusted;
+                    document.getElementById('suspicious-devices-count').textContent = suspicious;
+                    
+                    // Update table
+                    const tbody = document.getElementById('trust-scores-list');
+                    tbody.innerHTML = scoresList.map(([deviceId, score]) => {
+                        let level = 'trusted';
+                        let levelColor = '#4caf50';
+                        if (score < 30) {
+                            level = 'untrusted';
+                            levelColor = '#f44336';
+                        } else if (score < 50) {
+                            level = 'suspicious';
+                            levelColor = '#ff9800';
+                        } else if (score < 70) {
+                            level = 'monitored';
+                            levelColor = '#ffc107';
+                        }
+                        
+                        return `
+                            <tr>
+                                <td>${deviceId}</td>
+                                <td>
+                                    <div class="progress-bar">
+                                        <div style="width: ${score}%; background: ${levelColor};"></div>
+                                    </div>
+                                    <span>${score}/100</span>
+                                </td>
+                                <td><span style="color: ${levelColor};">${level.toUpperCase()}</span></td>
+                                <td>Active</td>
+                                <td>${new Date().toLocaleTimeString()}</td>
+                            </tr>
+                        `;
+                    }).join('');
+                })
+                .catch(error => {
+                    console.error('Error fetching trust scores:', error);
+                });
+        }
+
+        // Honeypot Update Functions
+        function updateHoneypotStatus() {
+            fetch('/api/honeypot/status')
+                .then(response => response.json())
+                .then(data => {
+                    const status = data.status || 'stopped';
+                    const running = status === 'running';
+                    document.getElementById('honeypot-status').textContent = running ? 'Running' : 'Stopped';
+                    document.getElementById('honeypot-status-label').textContent = running 
+                        ? 'Container Active' : 'Container Inactive';
+                    document.getElementById('honeypot-status').style.color = running ? '#4caf50' : '#f44336';
+                    
+                    // Update threats
+                    const threats = data.threats || [];
+                    document.getElementById('threats-captured').textContent = threats.length;
+                    
+                    // Update blocked IPs
+                    const blockedIPs = data.blocked_ips || [];
+                    document.getElementById('blocked-ips-count').textContent = blockedIPs.length;
+                    
+                    // Update recent threats list
+                    const threatsList = document.getElementById('recent-threats-list');
+                    if (threats.length === 0) {
+                        threatsList.innerHTML = '<div class="alert">No threats captured</div>';
+                    } else {
+                        threatsList.innerHTML = threats.slice(-10).reverse().map(threat => `
+                            <div class="alert ${threat.severity || 'medium'}">
+                                <strong>${threat.event_type || 'Unknown'}</strong><br>
+                                <small>IP: ${threat.source_ip || 'Unknown'}</small><br>
+                                <small>${threat.timestamp || ''}</small>
+                            </div>
+                        `).join('');
+                    }
+                    
+                    // Update mitigation rules
+                    const rules = data.mitigation_rules || [];
+                    const rulesList = document.getElementById('mitigation-rules-list');
+                    if (rules.length === 0) {
+                        rulesList.innerHTML = '<tr><td colspan="4">No mitigation rules generated</td></tr>';
+                    } else {
+                        rulesList.innerHTML = rules.slice(-20).reverse().map(rule => `
+                            <tr>
+                                <td>${rule.match_fields?.ipv4_src || 'N/A'}</td>
+                                <td>${rule.type || 'unknown'}</td>
+                                <td>${rule.reason || 'N/A'}</td>
+                                <td>${rule.generated_at || 'N/A'}</td>
+                            </tr>
+                        `).join('');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching honeypot status:', error);
+                });
+        }
+
+        // Certificates Update Functions
+        function updateCertificates() {
+            fetch('/api/certificates')
+                .then(response => response.json())
+                .then(data => {
+                    const certificates = data.certificates || [];
+                    document.getElementById('total-certificates').textContent = certificates.length;
+                    
+                    const valid = certificates.filter(c => c.status === 'valid').length;
+                    const expired = certificates.filter(c => c.status === 'expired').length;
+                    document.getElementById('valid-certificates').textContent = valid;
+                    document.getElementById('expired-certificates').textContent = expired;
+                    
+                    // Update certificates table
+                    const tbody = document.getElementById('certificates-list');
+                    if (certificates.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="5">No certificates issued</td></tr>';
+                    } else {
+                        tbody.innerHTML = certificates.map(cert => {
+                            const statusColor = cert.status === 'valid' ? '#4caf50' : '#f44336';
+                            return `
+                                <tr>
+                                    <td>${cert.device_id || 'N/A'}</td>
+                                    <td>${cert.mac_address || 'N/A'}</td>
+                                    <td><span style="color: ${statusColor};">${cert.status || 'unknown'}</span></td>
+                                    <td>${cert.valid_until || 'N/A'}</td>
+                                    <td>
+                                        <button class="btn-small" onclick="revokeCertificate('${cert.device_id}')">Revoke</button>
+                                    </td>
+                                </tr>
+                            `;
+                        }).join('');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching certificates:', error);
+                });
+        }
+
+        function revokeCertificate(deviceId) {
+            if (confirm(`Revoke certificate for ${deviceId}?`)) {
+                fetch(`/api/certificates/${deviceId}/revoke`, { method: 'POST' })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            showAlert(`Certificate revoked for ${deviceId}`, 'success');
+                            updateCertificates();
+                        } else {
+                            showAlert(`Failed to revoke certificate: ${data.error}`, 'error');
+                        }
+                    })
+                    .catch(error => {
+                        showAlert('Error revoking certificate', 'error');
+                    });
+            }
         }
 
         function showAlert(message, type) {
