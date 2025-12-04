@@ -1073,6 +1073,7 @@
             <button class="tab-button" data-tab="security" role="tab" aria-controls="security" tabindex="0">Security</button>
             <button class="tab-button" data-tab="ml-engine" role="tab" aria-controls="ml-engine" tabindex="0">ML Engine</button>
             <button class="tab-button" data-tab="analytics" role="tab" aria-controls="analytics" tabindex="0">Analytics</button>
+            <button class="tab-button" data-tab="approval" role="tab" aria-controls="approval" tabindex="0">Device Approval</button>
         </nav>
     </header>
 
@@ -1447,6 +1448,25 @@
             <div class="card">
                 <h3>Traffic Analysis</h3>
                 <div id="traffic-analysis" class="scroll-container"></div>
+            </div>
+        </section>
+
+        <!-- Device Approval Tab -->
+        <section id="approval" class="tab-content">
+            <div class="card">
+                <h3>Pending Device Approvals</h3>
+                <p style="color: var(--text-secondary); margin-bottom: 1rem;">
+                    New devices detected on the WiFi network are listed below. Review and approve or reject each device.
+                </p>
+                <div id="pending-devices-container" class="scroll-container">
+                    <div class="loading-indicator">Loading pending devices...</div>
+                </div>
+            </div>
+            <div class="card" style="margin-top: 1rem;">
+                <h3>Device Approval History</h3>
+                <div id="device-history-container" class="scroll-container">
+                    <div class="loading-indicator">Loading history...</div>
+                </div>
             </div>
         </section>
     </main>
@@ -2370,6 +2390,155 @@
             }
         }
 
+        // Device Approval Functions
+        function loadPendingDevices() {
+            fetch('/api/pending_devices')
+                .then(resp => resp.json())
+                .then(data => {
+                    const container = document.getElementById('pending-devices-container');
+                    if (data.status === 'error') {
+                        container.innerHTML = `<div class="loading-indicator">${data.message || 'Error loading pending devices'}</div>`;
+                        return;
+                    }
+                    
+                    const devices = data.devices || [];
+                    if (devices.length === 0) {
+                        container.innerHTML = '<div class="loading-indicator">No pending devices</div>';
+                        return;
+                    }
+                    
+                    let html = '<table class="device-table"><thead><tr><th>Device ID</th><th>MAC Address</th><th>Detected At</th><th>Actions</th></tr></thead><tbody>';
+                    devices.forEach(device => {
+                        const detectedAt = new Date(device.detected_at).toLocaleString();
+                        html += `
+                            <tr>
+                                <td>${device.device_id || 'N/A'}</td>
+                                <td>${device.mac_address}</td>
+                                <td>${detectedAt}</td>
+                                <td>
+                                    <button class="button button-primary" onclick="approveDevice('${device.mac_address}', '${device.device_id}')" style="margin-right: 0.5rem;">Approve</button>
+                                    <button class="button button-danger" onclick="rejectDevice('${device.mac_address}')">Reject</button>
+                                </td>
+                            </tr>
+                        `;
+                    });
+                    html += '</tbody></table>';
+                    container.innerHTML = html;
+                })
+                .catch(err => {
+                    console.error('Error loading pending devices:', err);
+                    document.getElementById('pending-devices-container').innerHTML = 
+                        '<div class="loading-indicator">Error loading pending devices</div>';
+                });
+        }
+
+        function approveDevice(macAddress, deviceId) {
+            if (!confirm(`Approve device ${deviceId} (${macAddress})?`)) {
+                return;
+            }
+            
+            fetch('/api/approve_device', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ mac_address: macAddress })
+            })
+                .then(resp => resp.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        alert('Device approved and onboarded successfully!');
+                        loadPendingDevices();
+                        loadDeviceHistory();
+                    } else {
+                        alert('Error: ' + (data.message || 'Failed to approve device'));
+                    }
+                })
+                .catch(err => {
+                    console.error('Error approving device:', err);
+                    alert('Error approving device');
+                });
+        }
+
+        function rejectDevice(macAddress) {
+            if (!confirm(`Reject device with MAC ${macAddress}?`)) {
+                return;
+            }
+            
+            fetch('/api/reject_device', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ mac_address: macAddress })
+            })
+                .then(resp => resp.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        alert('Device rejected');
+                        loadPendingDevices();
+                        loadDeviceHistory();
+                    } else {
+                        alert('Error: ' + (data.message || 'Failed to reject device'));
+                    }
+                })
+                .catch(err => {
+                    console.error('Error rejecting device:', err);
+                    alert('Error rejecting device');
+                });
+        }
+
+        function loadDeviceHistory() {
+            fetch('/api/device_history?limit=50')
+                .then(resp => resp.json())
+                .then(data => {
+                    const container = document.getElementById('device-history-container');
+                    if (data.status === 'error') {
+                        container.innerHTML = `<div class="loading-indicator">${data.message || 'Error loading history'}</div>`;
+                        return;
+                    }
+                    
+                    const history = data.history || [];
+                    if (history.length === 0) {
+                        container.innerHTML = '<div class="loading-indicator">No history available</div>';
+                        return;
+                    }
+                    
+                    let html = '<table class="device-table"><thead><tr><th>Timestamp</th><th>Device ID</th><th>MAC Address</th><th>Action</th><th>Notes</th></tr></thead><tbody>';
+                    history.forEach(entry => {
+                        const timestamp = new Date(entry.timestamp).toLocaleString();
+                        const actionClass = entry.action === 'approved' ? 'authorized' : 
+                                          entry.action === 'rejected' ? 'unauthorized' : '';
+                        html += `
+                            <tr>
+                                <td>${timestamp}</td>
+                                <td>${entry.device_id || 'N/A'}</td>
+                                <td>${entry.mac_address}</td>
+                                <td><span class="status-badge ${actionClass}">${entry.action}</span></td>
+                                <td>${entry.admin_notes || '-'}</td>
+                            </tr>
+                        `;
+                    });
+                    html += '</tbody></table>';
+                    container.innerHTML = html;
+                })
+                .catch(err => {
+                    console.error('Error loading device history:', err);
+                    document.getElementById('device-history-container').innerHTML = 
+                        '<div class="loading-indicator">Error loading history</div>';
+                });
+        }
+
+        // Auto-refresh pending devices when approval tab is active
+        let approvalRefreshInterval = null;
+        function startApprovalUpdates() {
+            if (approvalRefreshInterval) return;
+            loadPendingDevices();
+            loadDeviceHistory();
+            approvalRefreshInterval = setInterval(() => {
+                if (document.getElementById('approval').classList.contains('active')) {
+                    loadPendingDevices();
+                    loadDeviceHistory();
+                }
+            }, 5000);
+        }
+
         // Initialize UI once DOM is ready
         document.addEventListener('DOMContentLoaded', () => {
             try {
@@ -2393,6 +2562,18 @@
             } catch (e) {
                 // ignore
             }
+            // Start approval updates
+            startApprovalUpdates();
+            
+            // Load approval data when tab is clicked
+            document.querySelectorAll('.tab-button').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    if (this.dataset.tab === 'approval') {
+                        loadPendingDevices();
+                        loadDeviceHistory();
+                    }
+                });
+            });
         });
     </script>
 </body>

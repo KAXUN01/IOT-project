@@ -27,6 +27,15 @@ except ImportError as e:
     print("   System will use static device authorization")
     DeviceOnboarding = None
 
+# Try to import Auto-Onboarding Service, but make it optional
+try:
+    from network_monitor.auto_onboarding_service import AutoOnboardingService
+    AUTO_ONBOARDING_AVAILABLE = True
+except ImportError as e:
+    AUTO_ONBOARDING_AVAILABLE = False
+    print(f"⚠️  Auto-onboarding service not available: {e}")
+    AutoOnboardingService = None
+
 # Try to import ML engine, but make it optional
 try:
     from ml_security_engine import initialize_ml_engine, get_ml_engine
@@ -106,6 +115,24 @@ if ONBOARDING_AVAILABLE:
         ONBOARDING_AVAILABLE = False
 else:
     print("⚠️  Device onboarding not available - using static authorization")
+
+# Initialize Auto-Onboarding Service
+auto_onboarding_service = None
+if AUTO_ONBOARDING_AVAILABLE and onboarding:
+    try:
+        auto_onboarding_service = AutoOnboardingService(
+            onboarding_module=onboarding,
+            identity_db=onboarding.identity_db if onboarding else None
+        )
+        # Start the service
+        auto_onboarding_service.start()
+        print("✅ Auto-onboarding service initialized and started")
+    except Exception as e:
+        print(f"⚠️  Failed to initialize auto-onboarding service: {e}")
+        auto_onboarding_service = None
+        AUTO_ONBOARDING_AVAILABLE = False
+elif AUTO_ONBOARDING_AVAILABLE:
+    print("⚠️  Auto-onboarding service requires onboarding module")
 
 
 @app.route('/ml/health')
@@ -601,6 +628,171 @@ def verify_certificate():
         return json.dumps({
             'status': 'error',
             'message': str(e)
+        }), 500
+
+@app.route('/api/pending_devices', methods=['GET'])
+def get_pending_devices():
+    """
+    Get list of pending devices awaiting approval
+    
+    Returns:
+        List of pending devices
+    """
+    if not AUTO_ONBOARDING_AVAILABLE or not auto_onboarding_service:
+        return json.dumps({
+            'status': 'error',
+            'message': 'Auto-onboarding service not available',
+            'devices': []
+        }), 503
+    
+    try:
+        pending_devices = auto_onboarding_service.get_pending_devices()
+        return json.dumps({
+            'status': 'success',
+            'devices': pending_devices
+        }), 200
+    except Exception as e:
+        app.logger.error(f"Error getting pending devices: {e}")
+        return json.dumps({
+            'status': 'error',
+            'message': str(e),
+            'devices': []
+        }), 500
+
+@app.route('/api/approve_device', methods=['POST'])
+def approve_device():
+    """
+    Approve a pending device and trigger onboarding
+    
+    Request JSON:
+    {
+        "mac_address": "AA:BB:CC:DD:EE:FF",
+        "admin_notes": "Optional notes" (optional)
+    }
+    
+    Returns:
+        Approval and onboarding result
+    """
+    if not AUTO_ONBOARDING_AVAILABLE or not auto_onboarding_service:
+        return json.dumps({
+            'status': 'error',
+            'message': 'Auto-onboarding service not available'
+        }), 503
+    
+    try:
+        data = request.json
+        mac_address = data.get('mac_address')
+        admin_notes = data.get('admin_notes')
+        
+        if not mac_address:
+            return json.dumps({
+                'status': 'error',
+                'message': 'Missing mac_address'
+            }), 400
+        
+        # Approve and onboard device
+        result = auto_onboarding_service.approve_and_onboard(mac_address, admin_notes)
+        
+        if result.get('status') == 'success':
+            return json.dumps(result), 200
+        else:
+            return json.dumps(result), 400
+            
+    except Exception as e:
+        app.logger.error(f"Error approving device: {e}")
+        return json.dumps({
+            'status': 'error',
+            'message': str(e)
+        }), 500
+
+@app.route('/api/reject_device', methods=['POST'])
+def reject_device():
+    """
+    Reject a pending device
+    
+    Request JSON:
+    {
+        "mac_address": "AA:BB:CC:DD:EE:FF",
+        "admin_notes": "Optional notes" (optional)
+    }
+    
+    Returns:
+        Rejection result
+    """
+    if not AUTO_ONBOARDING_AVAILABLE or not auto_onboarding_service:
+        return json.dumps({
+            'status': 'error',
+            'message': 'Auto-onboarding service not available'
+        }), 503
+    
+    try:
+        data = request.json
+        mac_address = data.get('mac_address')
+        admin_notes = data.get('admin_notes')
+        
+        if not mac_address:
+            return json.dumps({
+                'status': 'error',
+                'message': 'Missing mac_address'
+            }), 400
+        
+        # Reject device
+        success = auto_onboarding_service.reject_device(mac_address, admin_notes)
+        
+        if success:
+            return json.dumps({
+                'status': 'success',
+                'message': 'Device rejected successfully'
+            }), 200
+        else:
+            return json.dumps({
+                'status': 'error',
+                'message': 'Failed to reject device (device not found or not pending)'
+            }), 400
+            
+    except Exception as e:
+        app.logger.error(f"Error rejecting device: {e}")
+        return json.dumps({
+            'status': 'error',
+            'message': str(e)
+        }), 500
+
+@app.route('/api/device_history', methods=['GET'])
+def get_device_history():
+    """
+    Get device approval history
+    
+    Query parameters:
+        mac_address: Optional MAC address filter
+        limit: Maximum number of records (default: 100)
+    
+    Returns:
+        Device approval history
+    """
+    if not AUTO_ONBOARDING_AVAILABLE or not auto_onboarding_service:
+        return json.dumps({
+            'status': 'error',
+            'message': 'Auto-onboarding service not available',
+            'history': []
+        }), 503
+    
+    try:
+        mac_address = request.args.get('mac_address')
+        limit = int(request.args.get('limit', 100))
+        
+        history = auto_onboarding_service.get_device_history(mac_address, limit)
+        
+        return json.dumps({
+            'status': 'success',
+            'history': history
+        }), 200
+        
+    except Exception as e:
+        app.logger.error(f"Error getting device history: {e}")
+        return json.dumps({
+            'status': 'error',
+            'message': str(e),
+            'history': []
         }), 500
 
 @app.route('/get_health_metrics')
