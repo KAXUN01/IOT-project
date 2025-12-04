@@ -38,37 +38,58 @@ from ryu_controller.traffic_redirector import TrafficRedirector
 
 logger = logging.getLogger(__name__)
 
-class SDNPolicyEngine:
-    """
-    Main SDN Policy Engine Ryu Application
-    Enforces Zero Trust policies through OpenFlow rules
-    """
-    
-    if RYU_AVAILABLE:
+# Define class with proper inheritance based on Ryu availability
+if RYU_AVAILABLE:
+    class SDNPolicyEngine(app_manager.RyuApp):
+        """
+        Main SDN Policy Engine Ryu Application
+        Enforces Zero Trust policies through OpenFlow rules
+        """
         OFP_VERSIONS = [ofproto_v1_3.OFP_VERSION]
-    else:
-        OFP_VERSIONS = []
-    
-    def __init__(self, *args, **kwargs):
-        if RYU_AVAILABLE:
+        
+        def __init__(self, *args, **kwargs):
             super(SDNPolicyEngine, self).__init__(*args, **kwargs)
+            # Policy storage
+            self.device_policies = {}  # {device_id: {'action': 'allow'|'deny'|'redirect'|'quarantine', 'match_fields': {...}}}
+            self.switch_datapaths = {}  # {dpid: datapath}
+            self.rule_generators = {}  # {dpid: OpenFlowRuleGenerator}
+            self.traffic_redirectors = {}  # {dpid: TrafficRedirector}
+            
+            # Policy callbacks from other modules
+            self.identity_module = None
+            self.analyst_module = None
+            self.trust_module = None
+            
+            # Honeypot port (default)
+            self.honeypot_port = 3
+            self.quarantine_port = 4
+            
+            logger.info("SDN Policy Engine initialized")
+else:
+    class SDNPolicyEngine:
+        """
+        Main SDN Policy Engine Ryu Application
+        Enforces Zero Trust policies through OpenFlow rules
+        """
+        OFP_VERSIONS = []
         
-        # Policy storage
-        self.device_policies = {}  # {device_id: {'action': 'allow'|'deny'|'redirect'|'quarantine', 'match_fields': {...}}}
-        self.switch_datapaths = {}  # {dpid: datapath}
-        self.rule_generators = {}  # {dpid: OpenFlowRuleGenerator}
-        self.traffic_redirectors = {}  # {dpid: TrafficRedirector}
-        
-        # Policy callbacks from other modules
-        self.identity_module = None
-        self.analyst_module = None
-        self.trust_module = None
-        
-        # Honeypot port (default)
-        self.honeypot_port = 3
-        self.quarantine_port = 4
-        
-        logger.info("SDN Policy Engine initialized")
+        def __init__(self, *args, **kwargs):
+            # Policy storage
+            self.device_policies = {}  # {device_id: {'action': 'allow'|'deny'|'redirect'|'quarantine', 'match_fields': {...}}}
+            self.switch_datapaths = {}  # {dpid: datapath}
+            self.rule_generators = {}  # {dpid: OpenFlowRuleGenerator}
+            self.traffic_redirectors = {}  # {dpid: TrafficRedirector}
+            
+            # Policy callbacks from other modules
+            self.identity_module = None
+            self.analyst_module = None
+            self.trust_module = None
+            
+            # Honeypot port (default)
+            self.honeypot_port = 3
+            self.quarantine_port = 4
+            
+            logger.info("SDN Policy Engine initialized")
     
     def set_identity_module(self, identity_module):
         """Set reference to identity management module"""

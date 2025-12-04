@@ -4,7 +4,7 @@ Handles redirection of suspicious traffic to honeypot network
 """
 
 import logging
-from ryu_controller.openflow_rules import OpenFlowRuleGenerator
+from .openflow_rules import OpenFlowRuleGenerator
 
 logger = logging.getLogger(__name__)
 

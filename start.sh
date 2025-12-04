@@ -266,22 +266,22 @@ else
     fi
 fi
 
-# Check Ryu (optional)
+# Check Ryu (required - other components depend on it)
 if command -v ryu-manager &> /dev/null || $PYTHON_CMD -c "import ryu" 2>/dev/null; then
     RYU_AVAILABLE=true
     echo -e "${GREEN}  ✅ Ryu SDN Controller${NC}"
 else
     RYU_AVAILABLE=false
-    echo -e "${YELLOW}  ⚠️  Ryu SDN Controller not found (optional)${NC}"
-    read -p "     Install Ryu? [y/N]: " -n 1 -r
-    echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        if install_ryu; then
-            RYU_AVAILABLE=true
-            echo -e "${GREEN}  ✅ Ryu SDN Controller${NC}"
-        else
-            echo -e "${YELLOW}  ⚠️  Ryu installation failed (will skip SDN features)${NC}"
-        fi
+    echo -e "${YELLOW}  ⚠️  Ryu SDN Controller not found (required)${NC}"
+    echo -e "${YELLOW}     Installing Ryu (required for Zero Trust Framework)...${NC}"
+    if install_ryu; then
+        RYU_AVAILABLE=true
+        echo -e "${GREEN}  ✅ Ryu SDN Controller installed${NC}"
+    else
+        echo -e "${RED}  ❌ Failed to install Ryu SDN Controller${NC}"
+        echo -e "${RED}     Please install manually: pip install ryu eventlet${NC}"
+        echo -e "${RED}     Or: pip3 install -r requirements.txt${NC}"
+        exit 1
     fi
 fi
 
@@ -418,48 +418,94 @@ if [ "$CONTROLLER_READY" = false ]; then
     echo -e "${YELLOW}   Continuing anyway - controller may be starting slowly...${NC}"
 fi
 
-# Start Ryu SDN Controller (if available)
+# Start Ryu SDN Controller (required - must start before other components)
 if [ "$RYU_AVAILABLE" = true ]; then
     echo ""
-    echo -e "${BLUE}🌐 Starting Ryu SDN Controller...${NC}"
+    echo -e "${BLUE}🌐 Starting Ryu SDN Controller (required)...${NC}"
     
     # Check if Ryu module file exists
     if [ ! -f "ryu_controller/sdn_policy_engine.py" ]; then
-        echo -e "${YELLOW}⚠️  Ryu controller file not found: ryu_controller/sdn_policy_engine.py${NC}"
-        echo -e "${YELLOW}   Skipping Ryu SDN Controller${NC}"
-        RYU_AVAILABLE=false
+        echo -e "${RED}❌ Ryu controller file not found: ryu_controller/sdn_policy_engine.py${NC}"
+        echo -e "${RED}   Cannot start system without Ryu controller${NC}"
+        exit 1
+    fi
+    
+    # Set PYTHONPATH to include project root for imports
+    export PYTHONPATH="${PYTHONPATH}:$(pwd)"
+    
+    if command -v ryu-manager &> /dev/null; then
+        ryu-manager ryu_controller.sdn_policy_engine > logs/ryu.log 2>&1 &
+        RYU_PID=$!
     else
-        if command -v ryu-manager &> /dev/null; then
-            ryu-manager ryu_controller/sdn_policy_engine.py > logs/ryu.log 2>&1 &
-            RYU_PID=$!
+        $PYTHON_CMD -m ryu.app.simple_switch_13 ryu_controller.sdn_policy_engine > logs/ryu.log 2>&1 &
+        RYU_PID=$!
+    fi
+    
+    # Wait for Ryu to start and verify it's running
+    echo -e "${YELLOW}⏳ Waiting for Ryu SDN Controller to initialize...${NC}"
+    RYU_READY=false
+    for i in {1..20}; do
+        if kill -0 $RYU_PID 2>/dev/null; then
+            # Check if Ryu is listening on port 6653 (OpenFlow)
+            if command -v netstat &> /dev/null; then
+                if netstat -tuln 2>/dev/null | grep -q ":6653 "; then
+                    RYU_READY=true
+                    break
+                fi
+            elif command -v ss &> /dev/null; then
+                if ss -tuln 2>/dev/null | grep -q ":6653 "; then
+                    RYU_READY=true
+                    break
+                fi
+            else
+                # If we can't check port, just verify process is running
+                sleep 2
+                if kill -0 $RYU_PID 2>/dev/null; then
+                    RYU_READY=true
+                    break
+                fi
+            fi
         else
-            $PYTHON_CMD -m ryu.app.simple_switch_13 ryu_controller/sdn_policy_engine.py > logs/ryu.log 2>&1 &
-            RYU_PID=$!
+            echo -e "${RED}❌ Ryu SDN Controller process died${NC}"
+            echo -e "${YELLOW}   Check logs/ryu.log for errors:${NC}"
+            tail -20 logs/ryu.log 2>/dev/null || echo "   (log file not found)"
+            exit 1
         fi
         
-        # Wait a moment and check if process is still running
-        sleep 2
-        if kill -0 $RYU_PID 2>/dev/null; then
-            echo -e "${GREEN}✅ Ryu SDN Controller started (PID: $RYU_PID)${NC}"
-        else
-            echo -e "${RED}❌ Ryu SDN Controller failed to start${NC}"
-            echo -e "${YELLOW}   Check logs/ryu.log for errors:${NC}"
-            tail -10 logs/ryu.log 2>/dev/null || echo "   (log file not found)"
-            RYU_PID=""
-            RYU_AVAILABLE=false
+        sleep 1
+        if [ $((i % 3)) -eq 0 ]; then
+            echo -n "."
         fi
+    done
+    
+    if [ "$RYU_READY" = true ]; then
+        echo ""
+        echo -e "${GREEN}✅ Ryu SDN Controller started and ready (PID: $RYU_PID)${NC}"
+    else
+        echo ""
+        echo -e "${RED}❌ Ryu SDN Controller failed to start properly${NC}"
+        echo -e "${YELLOW}   Check logs/ryu.log for errors:${NC}"
+        tail -20 logs/ryu.log 2>/dev/null || echo "   (log file not found)"
+        echo -e "${RED}   Cannot continue without Ryu controller${NC}"
+        exit 1
     fi
 else
     echo ""
-    echo -e "${YELLOW}⚠️  Skipping Ryu SDN Controller (not installed)${NC}"
-    echo -e "${YELLOW}   Install with: pip install ryu eventlet${NC}"
+    echo -e "${RED}❌ Ryu SDN Controller is required but not available${NC}"
+    echo -e "${RED}   Cannot start system without Ryu${NC}"
+    exit 1
 fi
 
-# Start Zero Trust Integration Framework (optional)
+# Start Zero Trust Integration Framework (requires Ryu to be running)
 echo ""
 echo -e "${BLUE}🔐 Starting Zero Trust Integration Framework...${NC}"
 if [ -f "zero_trust_integration.py" ]; then
-    if [ "$CRYPTOGRAPHY_AVAILABLE" = true ]; then
+    if [ "$RYU_AVAILABLE" != true ] || [ -z "$RYU_PID" ]; then
+        echo -e "${RED}❌ Cannot start Zero Trust Framework: Ryu SDN Controller is not running${NC}"
+        echo -e "${YELLOW}   Zero Trust Framework requires Ryu to be running${NC}"
+    elif [ "$CRYPTOGRAPHY_AVAILABLE" = true ]; then
+        # Wait a moment to ensure Ryu is fully ready
+        sleep 1
         $PYTHON_CMD zero_trust_integration.py > logs/zero_trust.log 2>&1 &
         ZERO_TRUST_PID=$!
         sleep 2
@@ -504,7 +550,7 @@ echo -e "   ${GREEN}✅${NC} Flask Controller:     http://localhost:5000 (PID: $
 if [ ! -z "$RYU_PID" ]; then
     echo -e "   ${GREEN}✅${NC} Ryu SDN Controller:   Running (PID: $RYU_PID)"
 else
-    echo -e "   ${YELLOW}⚠️${NC}  Ryu SDN Controller:   Not running (optional)"
+    echo -e "   ${RED}❌${NC}  Ryu SDN Controller:   Not running (REQUIRED)"
 fi
 if [ ! -z "$ZERO_TRUST_PID" ]; then
     echo -e "   ${GREEN}✅${NC} Zero Trust Framework:  Running (PID: $ZERO_TRUST_PID)"
@@ -555,14 +601,29 @@ while true; do
         exit 1
     fi
     
-    # Check Ryu if it was started (only report once)
+    # Check Ryu - CRITICAL: other components depend on it
     if [ ! -z "$RYU_PID" ] && ! kill -0 $RYU_PID 2>/dev/null; then
         if [ "$RYU_STOPPED_REPORTED" != "true" ]; then
             echo ""
-            echo -e "${YELLOW}⚠️  Ryu SDN Controller stopped unexpectedly${NC}"
+            echo -e "${RED}❌ CRITICAL: Ryu SDN Controller stopped unexpectedly!${NC}"
+            echo -e "${RED}   Other components depend on Ryu and may not function correctly${NC}"
             echo -e "${YELLOW}   Check logs/ryu.log for errors:${NC}"
-            tail -10 logs/ryu.log 2>/dev/null || echo "   (log file not found)"
+            tail -20 logs/ryu.log 2>/dev/null || echo "   (log file not found)"
             RYU_STOPPED_REPORTED="true"
+            echo -e "${YELLOW}   Attempting to restart Ryu...${NC}"
+            # Try to restart Ryu
+            export PYTHONPATH="${PYTHONPATH}:$(pwd)"
+            if command -v ryu-manager &> /dev/null; then
+                ryu-manager ryu_controller.sdn_policy_engine >> logs/ryu.log 2>&1 &
+                RYU_PID=$!
+                sleep 3
+                if kill -0 $RYU_PID 2>/dev/null; then
+                    echo -e "${GREEN}✅ Ryu SDN Controller restarted (PID: $RYU_PID)${NC}"
+                    RYU_STOPPED_REPORTED="false"
+                else
+                    echo -e "${RED}❌ Failed to restart Ryu SDN Controller${NC}"
+                fi
+            fi
         fi
         RYU_PID=""
     fi
