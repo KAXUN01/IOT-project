@@ -14,6 +14,19 @@ import uuid
 from datetime import datetime
 import random
 import threading
+import os
+import logging
+
+# Try to import DeviceOnboarding, but make it optional
+try:
+    from identity_manager.device_onboarding import DeviceOnboarding
+    ONBOARDING_AVAILABLE = True
+except ImportError as e:
+    ONBOARDING_AVAILABLE = False
+    print(f"⚠️  Device onboarding not available: {e}")
+    print("   System will use static device authorization")
+    DeviceOnboarding = None
+
 # Try to import ML engine, but make it optional
 try:
     from ml_security_engine import initialize_ml_engine, get_ml_engine
@@ -78,6 +91,22 @@ sdn_metrics = {
 ml_engine = None
 ml_monitoring_active = False
 
+# Initialize Device Onboarding System
+onboarding = None
+if ONBOARDING_AVAILABLE:
+    try:
+        certs_dir = os.path.join(os.path.dirname(__file__), 'certs')
+        db_path = os.path.join(os.path.dirname(__file__), 'identity.db')
+        onboarding = DeviceOnboarding(certs_dir=certs_dir, db_path=db_path)
+        print("✅ Device onboarding system initialized")
+    except Exception as e:
+        print(f"⚠️  Failed to initialize device onboarding: {e}")
+        print("   System will use static device authorization")
+        onboarding = None
+        ONBOARDING_AVAILABLE = False
+else:
+    print("⚠️  Device onboarding not available - using static authorization")
+
 
 @app.route('/ml/health')
 def ml_health():
@@ -137,19 +166,115 @@ def update_sdn_metrics():
     sdn_metrics["data_plane_throughput"] = random.randint(100, 1000)
     sdn_metrics["policy_enforcement_rate"] = random.randint(80, 100)
 
+@app.route('/onboard', methods=['POST'])
+def onboard_device():
+    """
+    Onboard a new IoT device with certificate provisioning
+    
+    Request JSON:
+    {
+        "device_id": "ESP32_2",
+        "mac_address": "AA:BB:CC:DD:EE:FF",
+        "device_type": "sensor" (optional),
+        "device_info": "Additional info" (optional)
+    }
+    
+    Returns:
+        Onboarding result with certificate paths and CA certificate
+    """
+    if not ONBOARDING_AVAILABLE or not onboarding:
+        return json.dumps({
+            'status': 'error',
+            'message': 'Device onboarding system not available'
+        }), 503
+    
+    try:
+        data = request.json
+        device_id = data.get('device_id')
+        mac_address = data.get('mac_address')
+        device_type = data.get('device_type')
+        device_info = data.get('device_info')
+        
+        if not device_id or not mac_address:
+            return json.dumps({
+                'status': 'error',
+                'message': 'Missing device_id or mac_address'
+            }), 400
+        
+        # Onboard the device
+        result = onboarding.onboard_device(
+            device_id=device_id,
+            mac_address=mac_address,
+            device_type=device_type,
+            device_info=device_info
+        )
+        
+        if result['status'] == 'success':
+            # Store MAC address for topology
+            mac_addresses[device_id] = mac_address
+            # Initialize device tracking
+            if device_id not in device_data:
+                device_data[device_id] = []
+            if device_id not in last_seen:
+                last_seen[device_id] = time.time()
+            if device_id not in packet_counts:
+                packet_counts[device_id] = []
+            
+            return json.dumps(result), 200
+        else:
+            return json.dumps(result), 400
+            
+    except Exception as e:
+        app.logger.error(f"Onboarding error: {str(e)}")
+        return json.dumps({
+            'status': 'error',
+            'message': str(e)
+        }), 500
+
 @app.route('/get_token', methods=['POST'])
 def get_token():
+    """
+    Get authentication token for device
+    
+    First checks if device is onboarded (certificate-based).
+    Falls back to static authorized_devices list for backward compatibility.
+    """
     data = request.json
     device_id = data.get('device_id')
     mac_address = data.get('mac_address')  # Get MAC address from request
     if not device_id:
         return json.dumps({'error': 'Missing device_id'}), 400
-    if not authorized_devices.get(device_id, False):
+    
+    # Check if device is onboarded (certificate-based authentication)
+    device_authorized = False
+    if ONBOARDING_AVAILABLE and onboarding:
+        try:
+            device_info = onboarding.get_device_info(device_id)
+            if device_info:
+                # Device is onboarded - verify certificate
+                if onboarding.verify_device_certificate(device_id):
+                    device_authorized = True
+                    # Update MAC address from database if not provided
+                    if not mac_address and device_info.get('mac_address'):
+                        mac_address = device_info['mac_address']
+                else:
+                    app.logger.warning(f"Device {device_id} certificate verification failed")
+        except Exception as e:
+            app.logger.error(f"Error checking onboarding database: {e}")
+    
+    # Fallback to static authorized_devices list
+    if not device_authorized:
+        device_authorized = authorized_devices.get(device_id, False)
+    
+    if not device_authorized:
         return json.dumps({'error': 'Device not authorized'}), 403
+    
+    # Generate token for authorized device
     token = str(uuid.uuid4())
     device_tokens[device_id] = {"token": token, "last_activity": time.time()}
     if mac_address:  # Store the MAC address if provided
         mac_addresses[device_id] = mac_address
+    
     return json.dumps({'token': token})
 
 @app.route('/auth', methods=['POST'])
@@ -185,6 +310,11 @@ def auth():
 
 @app.route('/data', methods=['POST'])
 def data():
+    """
+    Receive data from IoT device
+    
+    Verifies device is onboarded or in authorized list before accepting data.
+    """
     data = request.json
     device_id = data.get('device_id')
     token = data.get('token')
@@ -192,10 +322,31 @@ def data():
     data_value = data.get('data', 0)
 
     if not device_id or not token or not packet_time:
-        return json.dumps({'status': 'rejected'})
+        return json.dumps({'status': 'rejected', 'reason': 'Missing required fields'})
 
+    # Verify token
     if device_id not in device_tokens or device_tokens[device_id]["token"] != token:
-        return json.dumps({'status': 'rejected'})
+        return json.dumps({'status': 'rejected', 'reason': 'Invalid token'})
+    
+    # Verify device is authorized (onboarded or in static list)
+    device_authorized = False
+    if ONBOARDING_AVAILABLE and onboarding:
+        try:
+            device_info = onboarding.get_device_info(device_id)
+            if device_info and device_info.get('status') != 'revoked':
+                # Device is onboarded and not revoked
+                device_authorized = True
+                # Update last_seen in database
+                onboarding.identity_db.update_last_seen(device_id)
+        except Exception as e:
+            app.logger.error(f"Error checking device authorization: {e}")
+    
+    # Fallback to static authorized_devices list
+    if not device_authorized:
+        device_authorized = authorized_devices.get(device_id, False)
+    
+    if not device_authorized:
+        return json.dumps({'status': 'rejected', 'reason': 'Device not authorized'})
 
     current_time = time.time()
     last_activity = device_tokens[device_id]["last_activity"]
@@ -316,6 +467,11 @@ def get_topology():
 
 @app.route('/get_topology_with_mac')
 def get_topology_with_mac():
+    """
+    Get network topology with MAC addresses
+    
+    Uses onboarding database to get device list, merges with last_seen tracking.
+    """
     current_time = time.time()
     topology = {
         "nodes": [],
@@ -326,7 +482,7 @@ def get_topology_with_mac():
     topology["nodes"].append({
         "id": "ESP32_Gateway",
         "label": "Gateway",
-        "mac": mac_addresses["ESP32_Gateway"],
+        "mac": mac_addresses.get("ESP32_Gateway", "A0:B1:C2:D3:E4:F5"),
         "online": True,
         "status": "active",
         "type": "gateway",
@@ -334,27 +490,118 @@ def get_topology_with_mac():
         "packets": 0
     })
     
+    # Get devices from onboarding database if available
+    devices_from_db = {}
+    if ONBOARDING_AVAILABLE and onboarding:
+        try:
+            db_devices = onboarding.identity_db.get_all_devices()
+            for device in db_devices:
+                devices_from_db[device['device_id']] = device
+                # Store MAC address if not already stored
+                if device['device_id'] not in mac_addresses and device.get('mac_address'):
+                    mac_addresses[device['device_id']] = device['mac_address']
+        except Exception as e:
+            app.logger.error(f"Error getting devices from database: {e}")
+    
+    # Merge database devices with last_seen tracking
+    all_device_ids = set(list(last_seen.keys()) + list(devices_from_db.keys()))
+    
     # Add ESP32 device nodes and edges to gateway
-    for device, last_seen_time in last_seen.items():
+    for device_id in all_device_ids:
+        # Get last_seen time (from tracking or database)
+        last_seen_time = last_seen.get(device_id, 0)
+        if device_id in devices_from_db and devices_from_db[device_id].get('last_seen'):
+            # Try to parse database timestamp if available
+            try:
+                db_timestamp = devices_from_db[device_id]['last_seen']
+                if isinstance(db_timestamp, str):
+                    from datetime import datetime
+                    db_time = datetime.fromisoformat(db_timestamp.replace('Z', '+00:00'))
+                    last_seen_time = db_time.timestamp()
+                elif db_timestamp:
+                    last_seen_time = float(db_timestamp)
+            except:
+                pass
+        
         online = (current_time - last_seen_time) < 10
+        
+        # Get device info from database if available
+        device_info = devices_from_db.get(device_id, {})
+        device_status = device_info.get('status', 'active' if online else 'inactive')
+        
+        # Get MAC address (from database, mac_addresses dict, or default)
+        mac = (mac_addresses.get(device_id) or 
+               device_info.get('mac_address') or 
+               "Unknown")
+        
         topology["nodes"].append({
-            "id": device,
-            "label": device,
-            "mac": mac_addresses.get(device, "Unknown"),
+            "id": device_id,
+            "label": device_id,
+            "mac": mac,
             "online": online,
-            "status": "active" if online else "inactive",
+            "status": device_status,
             "type": "device",
             "last_seen": last_seen_time,
-            "packets": sum(device_data.get(device, []))
+            "packets": sum(device_data.get(device_id, [])),
+            "onboarded": device_id in devices_from_db
         })
+        
         # Only add edge if device is online/connected
-        if online:
+        if online and device_status != 'revoked':
             topology["edges"].append({
-                "from": device,
+                "from": device_id,
                 "to": "ESP32_Gateway"
             })
     
     return json.dumps(topology)
+
+@app.route('/verify_certificate', methods=['POST'])
+def verify_certificate():
+    """
+    Verify device certificate
+    
+    Request JSON:
+    {
+        "device_id": "ESP32_2"
+    }
+    
+    Returns:
+        Certificate verification status
+    """
+    if not ONBOARDING_AVAILABLE or not onboarding:
+        return json.dumps({
+            'status': 'error',
+            'message': 'Device onboarding system not available'
+        }), 503
+    
+    try:
+        data = request.json
+        device_id = data.get('device_id')
+        
+        if not device_id:
+            return json.dumps({
+                'status': 'error',
+                'message': 'Missing device_id'
+            }), 400
+        
+        # Verify certificate
+        is_valid = onboarding.verify_device_certificate(device_id)
+        device_info = onboarding.get_device_info(device_id)
+        
+        return json.dumps({
+            'status': 'success',
+            'device_id': device_id,
+            'certificate_valid': is_valid,
+            'device_status': device_info.get('status') if device_info else None,
+            'onboarded_at': device_info.get('onboarded_at') if device_info else None
+        }), 200
+        
+    except Exception as e:
+        app.logger.error(f"Certificate verification error: {str(e)}")
+        return json.dumps({
+            'status': 'error',
+            'message': str(e)
+        }), 500
 
 @app.route('/get_health_metrics')
 def get_health_metrics():
