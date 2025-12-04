@@ -65,53 +65,28 @@ if RYU_AVAILABLE:
             self.quarantine_port = 4
             
             logger.info("SDN Policy Engine initialized")
-else:
-    class SDNPolicyEngine:
-        """
-        Main SDN Policy Engine Ryu Application
-        Enforces Zero Trust policies through OpenFlow rules
-        """
-        OFP_VERSIONS = []
         
-        def __init__(self, *args, **kwargs):
-            # Policy storage
-            self.device_policies = {}  # {device_id: {'action': 'allow'|'deny'|'redirect'|'quarantine', 'match_fields': {...}}}
-            self.switch_datapaths = {}  # {dpid: datapath}
-            self.rule_generators = {}  # {dpid: OpenFlowRuleGenerator}
-            self.traffic_redirectors = {}  # {dpid: TrafficRedirector}
-            
-            # Policy callbacks from other modules
-            self.identity_module = None
-            self.analyst_module = None
-            self.trust_module = None
-            
-            # Honeypot port (default)
-            self.honeypot_port = 3
-            self.quarantine_port = 4
-            
-            logger.info("SDN Policy Engine initialized")
-    
-    def set_identity_module(self, identity_module):
-        """Set reference to identity management module"""
-        self.identity_module = identity_module
-        logger.info("Identity module connected")
-    
-    def set_analyst_module(self, analyst_module):
-        """Set reference to heuristic analyst module"""
-        self.analyst_module = analyst_module
-        logger.info("Analyst module connected")
-    
-    def set_trust_module(self, trust_module):
-        """Set reference to trust evaluation module"""
-        self.trust_module = trust_module
-        logger.info("Trust module connected")
-    
-    @set_ev_cls(ofp_event.EventOFPSwitchFeatures, CONFIG_DISPATCHER)
-    def switch_features_handler(self, ev):
+        def set_identity_module(self, identity_module):
+            """Set reference to identity management module"""
+            self.identity_module = identity_module
+            logger.info("Identity module connected")
+        
+        def set_analyst_module(self, analyst_module):
+            """Set reference to heuristic analyst module"""
+            self.analyst_module = analyst_module
+            logger.info("Analyst module connected")
+        
+        def set_trust_module(self, trust_module):
+            """Set reference to trust evaluation module"""
+            self.trust_module = trust_module
+            logger.info("Trust module connected")
+        
+        @set_ev_cls(ofp_event.EventOFPSwitchFeatures, CONFIG_DISPATCHER)
+        def switch_features_handler(self, ev):
         """
-        Handle switch connection and initialize flow tables
+            Handle switch connection and initialize flow tables
         """
-        datapath = ev.msg.datapath
+            datapath = ev.msg.datapath
         ofproto = datapath.ofproto
         parser = datapath.ofproto_parser
         
@@ -141,12 +116,12 @@ else:
         
         logger.info(f"Default rule installed on switch {dpid}")
     
-    @set_ev_cls(ofp_event.EventOFPPacketIn, MAIN_DISPATCHER)
-    def packet_in_handler(self, ev):
+        @set_ev_cls(ofp_event.EventOFPPacketIn, MAIN_DISPATCHER)
+            def packet_in_handler(self, ev):
         """
-        Handle packets sent to controller (unknown flows)
+            Handle packets sent to controller (unknown flows)
         """
-        msg = ev.msg
+            msg = ev.msg
         datapath = msg.datapath
         ofproto = datapath.ofproto
         parser = datapath.ofproto_parser
@@ -218,11 +193,10 @@ else:
             datapath.send_msg(mod)
             logger.warning(f"Quarantined device {device_id} ({eth_src})")
     
-    def apply_policy(self, device_id, action, match_fields=None, priority=100):
+        def apply_policy(self, device_id, action, match_fields=None, priority=100):
         """
-        Apply a policy to a device across all switches
-        
-        Args:
+            Apply a policy to a device across all switches
+                        Args:
             device_id: Device identifier
             action: Policy action ('allow', 'deny', 'redirect', 'quarantine')
             match_fields: Match fields for the rule (default: device MAC)
@@ -277,11 +251,10 @@ else:
             except Exception as e:
                 logger.error(f"Failed to apply policy to {device_id} on switch {dpid}: {e}")
     
-    def remove_policy(self, device_id):
+        def remove_policy(self, device_id):
         """
-        Remove policy for a device
-        
-        Args:
+            Remove policy for a device
+                        Args:
             device_id: Device identifier
         """
         if device_id not in self.device_policies:
@@ -305,12 +278,10 @@ else:
         
         del self.device_policies[device_id]
         logger.info(f"Removed policy for {device_id}")
-    
-    def _get_device_policy(self, device_id, eth_src):
+                    def _get_device_policy(self, device_id, eth_src):
         """
-        Get policy for a device
-        
-        Args:
+            Get policy for a device
+                        Args:
             device_id: Device identifier
             eth_src: Ethernet source address
             
@@ -333,12 +304,10 @@ else:
         
         # Default: allow
         return {'action': 'allow', 'match_fields': {'eth_src': eth_src}}
-    
-    def _get_device_id_from_mac(self, mac_address):
+                    def _get_device_id_from_mac(self, mac_address):
         """
-        Get device ID from MAC address
-        
-        Args:
+            Get device ID from MAC address
+                        Args:
             mac_address: MAC address
             
         Returns:
@@ -347,12 +316,10 @@ else:
         if self.identity_module:
             return self.identity_module.get_device_id_from_mac(mac_address)
         return None
-    
-    def handle_analyst_alert(self, device_id, alert_type, severity):
+                    def handle_analyst_alert(self, device_id, alert_type, severity):
         """
-        Handle alert from heuristic analyst module
-        
-        Args:
+            Handle alert from heuristic analyst module
+                        Args:
             device_id: Device identifier
             alert_type: Type of alert (e.g., 'dos', 'scanning', 'anomaly')
             severity: Alert severity ('low', 'medium', 'high')
@@ -366,12 +333,10 @@ else:
             # Notify trust module to lower trust score
             if self.trust_module:
                 self.trust_module.adjust_trust_score(device_id, -20, f"Analyst alert: {alert_type}")
-    
-    def handle_trust_score_change(self, device_id, new_score):
+                    def handle_trust_score_change(self, device_id, new_score):
         """
-        Handle trust score change from trust evaluation module
-        
-        Args:
+            Handle trust score change from trust evaluation module
+                        Args:
             device_id: Device identifier
             new_score: New trust score (0-100)
         """

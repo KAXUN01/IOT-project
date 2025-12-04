@@ -433,9 +433,9 @@ if [ "$RYU_AVAILABLE" = true ]; then
     # Set PYTHONPATH to include project root for imports
     export PYTHONPATH="${PYTHONPATH}:$(pwd)"
     
-    if command -v ryu-manager &> /dev/null; then
-        ryu-manager ryu_controller.sdn_policy_engine > logs/ryu.log 2>&1 &
-        RYU_PID=$!
+        if command -v ryu-manager &> /dev/null; then
+            ryu-manager --ofp-tcp-listen-port 6653 --verbose ryu_controller.sdn_policy_engine > logs/ryu.log 2>&1 &
+            RYU_PID=$!
     else
         $PYTHON_CMD -m ryu.app.simple_switch_13 ryu_controller.sdn_policy_engine > logs/ryu.log 2>&1 &
         RYU_PID=$!
