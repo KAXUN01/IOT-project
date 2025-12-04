@@ -322,12 +322,14 @@ def get_topology_with_mac():
         "edges": []
     }
     
-    # Add gateway node
+    # Add gateway node (always online/connected)
     topology["nodes"].append({
         "id": "ESP32_Gateway",
         "label": "Gateway",
         "mac": mac_addresses["ESP32_Gateway"],
         "online": True,
+        "status": "active",
+        "type": "gateway",
         "last_seen": current_time,
         "packets": 0
     })
@@ -340,13 +342,17 @@ def get_topology_with_mac():
             "label": device,
             "mac": mac_addresses.get(device, "Unknown"),
             "online": online,
+            "status": "active" if online else "inactive",
+            "type": "device",
             "last_seen": last_seen_time,
             "packets": sum(device_data.get(device, []))
         })
-        topology["edges"].append({
-            "from": device,
-            "to": "ESP32_Gateway"
-        })
+        # Only add edge if device is online/connected
+        if online:
+            topology["edges"].append({
+                "from": device,
+                "to": "ESP32_Gateway"
+            })
     
     return json.dumps(topology)
 
@@ -637,4 +643,12 @@ if __name__ == '__main__':
     
     # Run the Flask app
     print("🌐 Starting Flask Controller on http://0.0.0.0:5000")
-    app.run(host='0.0.0.0', port=5000, use_reloader=False, debug=False)  # disable reloader to prevent duplicate ML engine initialization
+    try:
+        app.run(host='0.0.0.0', port=5000, use_reloader=False, debug=False, threaded=True)  # disable reloader to prevent duplicate ML engine initialization
+    except KeyboardInterrupt:
+        print("\n🛑 Flask Controller stopped by user")
+    except Exception as e:
+        print(f"❌ Flask Controller error: {e}")
+        import traceback
+        traceback.print_exc()
+        raise

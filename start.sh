@@ -34,6 +34,7 @@ ZERO_TRUST_PID=""
 MININET_PID=""
 
 # Status flags to prevent repeated warnings
+CONTROLLER_STOPPED_REPORTED="false"
 RYU_STOPPED_REPORTED="false"
 ZERO_TRUST_STOPPED_REPORTED="false"
 MININET_STOPPED_REPORTED="false"
@@ -327,7 +328,31 @@ echo -e "${GREEN}✅ Directories ready${NC}"
 # Start Flask Controller
 echo ""
 echo -e "${BLUE}🚀 Starting Flask Controller...${NC}"
-$PYTHON_CMD controller.py > logs/controller.log 2>&1 &
+
+# Check if port 5000 is already in use
+if command -v lsof &> /dev/null; then
+    EXISTING_PID=$(lsof -ti:5000 2>/dev/null)
+    if [ ! -z "$EXISTING_PID" ]; then
+        echo -e "${YELLOW}⚠️  Port 5000 is already in use (PID: $EXISTING_PID)${NC}"
+        echo -e "${YELLOW}   Stopping existing process...${NC}"
+        kill $EXISTING_PID 2>/dev/null || true
+        sleep 2
+    fi
+elif command -v netstat &> /dev/null; then
+    EXISTING_PID=$(netstat -tuln 2>/dev/null | grep ":5000 " | awk '{print $NF}' | cut -d'/' -f1 | head -1)
+    if [ ! -z "$EXISTING_PID" ]; then
+        echo -e "${YELLOW}⚠️  Port 5000 is already in use${NC}"
+        echo -e "${YELLOW}   Attempting to stop existing process...${NC}"
+        pkill -f "controller.py" 2>/dev/null || true
+        sleep 2
+    fi
+fi
+
+# Also kill any existing controller.py processes
+pkill -f "controller.py" 2>/dev/null || true
+sleep 1
+
+nohup $PYTHON_CMD controller.py > logs/controller.log 2>&1 &
 CONTROLLER_PID=$!
 echo -e "${GREEN}✅ Flask Controller started (PID: $CONTROLLER_PID)${NC}"
 
@@ -596,9 +621,38 @@ while true; do
     
     # Check if controller is still running
     if [ ! -z "$CONTROLLER_PID" ] && ! kill -0 $CONTROLLER_PID 2>/dev/null; then
-        echo -e "${RED}❌ Flask Controller stopped unexpectedly!${NC}"
-        cleanup
-        exit 1
+        if [ "$CONTROLLER_STOPPED_REPORTED" != "true" ]; then
+            echo ""
+            echo -e "${RED}❌ Flask Controller stopped unexpectedly!${NC}"
+            echo -e "${YELLOW}   Checking logs/controller.log for errors:${NC}"
+            tail -20 logs/controller.log 2>/dev/null || echo "   (log file not found)"
+            
+            # Check if port is still in use (might be a different process)
+            if command -v lsof &> /dev/null; then
+                OTHER_PID=$(lsof -ti:5000 2>/dev/null)
+                if [ ! -z "$OTHER_PID" ] && [ "$OTHER_PID" != "$CONTROLLER_PID" ]; then
+                    echo -e "${YELLOW}   Port 5000 is in use by another process (PID: $OTHER_PID)${NC}"
+                    echo -e "${YELLOW}   Stopping conflicting process...${NC}"
+                    kill $OTHER_PID 2>/dev/null || true
+                    sleep 1
+                fi
+            fi
+            
+            # Try to restart the controller
+            echo -e "${YELLOW}   Attempting to restart Flask Controller...${NC}"
+            nohup $PYTHON_CMD controller.py > logs/controller.log 2>&1 &
+            CONTROLLER_PID=$!
+            sleep 3
+            if kill -0 $CONTROLLER_PID 2>/dev/null; then
+                echo -e "${GREEN}✅ Flask Controller restarted (PID: $CONTROLLER_PID)${NC}"
+                CONTROLLER_STOPPED_REPORTED="false"
+            else
+                echo -e "${RED}❌ Failed to restart Flask Controller${NC}"
+                CONTROLLER_STOPPED_REPORTED="true"
+                cleanup
+                exit 1
+            fi
+        fi
     fi
     
     # Check Ryu - CRITICAL: other components depend on it
