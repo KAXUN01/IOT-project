@@ -5,8 +5,6 @@ Real-time network traffic analysis using pre-trained ML models
 
 import numpy as np
 import pandas as pd
-import tensorflow as tf
-from tensorflow import keras
 import json
 import time
 from datetime import datetime
@@ -15,6 +13,18 @@ import threading
 import logging
 import os
 from simple_ddos_detector import SimpleDDoSDetector
+
+# Try to import TensorFlow, but make it optional
+try:
+    import tensorflow as tf
+    from tensorflow import keras
+    TENSORFLOW_AVAILABLE = True
+except ImportError:
+    TENSORFLOW_AVAILABLE = False
+    tf = None
+    keras = None
+    logger = logging.getLogger(__name__)
+    logger.warning("TensorFlow not available. ML model features will be limited.")
 
 # Module-level constants for health checks
 HEALTH_CHECK_INTERVAL = 60  # seconds

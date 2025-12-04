@@ -14,7 +14,26 @@ import uuid
 from datetime import datetime
 import random
 import threading
-from ml_security_engine import initialize_ml_engine, get_ml_engine
+# Try to import ML engine, but make it optional
+try:
+    from ml_security_engine import initialize_ml_engine, get_ml_engine
+    # Check if TensorFlow is actually available
+    try:
+        import tensorflow as tf
+        ML_ENGINE_AVAILABLE = True
+    except ImportError:
+        ML_ENGINE_AVAILABLE = False
+        print("⚠️  TensorFlow not available. ML model features will be limited.")
+        print("   System will run with heuristic-based detection")
+except ImportError as e:
+    ML_ENGINE_AVAILABLE = False
+    print(f"⚠️  ML engine not available: {e}")
+    print("   System will run without ML-based detection")
+    # Create dummy functions
+    def initialize_ml_engine():
+        return None
+    def get_ml_engine():
+        return None
 
 app = Flask(__name__)
 
@@ -63,6 +82,12 @@ ml_monitoring_active = False
 @app.route('/ml/health')
 def ml_health():
     """Get ML engine health status"""
+    if not ML_ENGINE_AVAILABLE:
+        return json.dumps({
+            'status': 'unavailable',
+            'message': 'ML engine not available (TensorFlow not installed)'
+        }), 503
+    
     try:
         global ml_engine
         if not ml_engine:
@@ -71,16 +96,19 @@ def ml_health():
                 'message': 'ML engine not initialized'
             }), 503
 
+        network_stats = getattr(ml_engine, 'network_stats', {})
+        is_loaded = getattr(ml_engine, 'is_loaded', False)
+        
         health_data = {
-            'status': 'healthy' if getattr(ml_engine, 'is_loaded', False) else 'error',
-            'uptime': getattr(ml_engine, 'network_stats', {}).get('uptime'),
-            'last_health_check': getattr(ml_engine, 'network_stats', {}).get('last_health_check'),
-            'model_status': getattr(ml_engine, 'network_stats', {}).get('model_status'),
-            'total_packets_processed': getattr(ml_engine, 'network_stats', {}).get('total_packets'),
-            'detection_accuracy': getattr(ml_engine, 'network_stats', {}).get('detection_accuracy')
+            'status': 'healthy' if is_loaded else 'error',
+            'uptime': network_stats.get('uptime'),
+            'last_health_check': network_stats.get('last_health_check'),
+            'model_status': network_stats.get('model_status'),
+            'total_packets_processed': network_stats.get('total_packets'),
+            'detection_accuracy': network_stats.get('detection_accuracy')
         }
 
-        return json.dumps(health_data), 200 if getattr(ml_engine, 'is_loaded', False) else 503
+        return json.dumps(health_data), 200 if is_loaded else 503
 
     except Exception as e:
         app.logger.error(f"Health check error: {str(e)}")
@@ -144,13 +172,15 @@ def auth():
     device_tokens[device_id]["last_activity"] = current_time
 
     # Start per-device ML monitoring on first successful auth in this session
-    global ml_engine, ml_monitoring_active
-    if ml_engine is None:
-        ml_engine = initialize_ml_engine()
-    if ml_engine and ml_engine.is_loaded and not ml_monitoring_active:
-        # Begin background monitoring
-        ml_engine.start_monitoring()
-        ml_monitoring_active = True
+    if ML_ENGINE_AVAILABLE:
+        global ml_engine, ml_monitoring_active
+        if ml_engine is None:
+            ml_engine = initialize_ml_engine()
+        if ml_engine and hasattr(ml_engine, 'is_loaded') and ml_engine.is_loaded and not ml_monitoring_active:
+            # Begin background monitoring
+            if hasattr(ml_engine, 'start_monitoring'):
+                ml_engine.start_monitoring()
+            ml_monitoring_active = True
     return json.dumps({'device_id': device_id, 'authorized': True})
 
 @app.route('/data', methods=['POST'])
@@ -415,16 +445,20 @@ def get_sdn_metrics():
 @app.route('/ml/initialize')
 def initialize_ml():
     """Initialize the ML security engine"""
+    if not ML_ENGINE_AVAILABLE:
+        return json.dumps({'status': 'error', 'message': 'ML engine not available (TensorFlow not installed)'})
+    
     global ml_engine, ml_monitoring_active
     try:
         # Already initialized and healthy
-        if ml_engine and ml_engine.is_loaded:
+        if ml_engine and hasattr(ml_engine, 'is_loaded') and ml_engine.is_loaded:
             return json.dumps({'status': 'success', 'message': 'ML engine already running'})
 
         ml_engine = initialize_ml_engine()
-        if ml_engine and ml_engine.is_loaded:
+        if ml_engine and hasattr(ml_engine, 'is_loaded') and ml_engine.is_loaded:
             ml_monitoring_active = True
-            ml_engine.start_monitoring()
+            if hasattr(ml_engine, 'start_monitoring'):
+                ml_engine.start_monitoring()
             return json.dumps({'status': 'success', 'message': 'ML engine initialized and monitoring started'})
         else:
             return json.dumps({'status': 'error', 'message': 'Failed to initialize ML engine'})
@@ -434,21 +468,31 @@ def initialize_ml():
 @app.route('/ml/status')
 def ml_status():
     """Get ML engine status"""
+    if not ML_ENGINE_AVAILABLE:
+        return json.dumps({
+            'status': 'unavailable',
+            'monitoring': False,
+            'message': 'ML engine not available (TensorFlow not installed)'
+        })
+    
     global ml_engine, ml_monitoring_active
     
     # Auto-initialize if not running
     if not ml_engine:
         try:
             ml_engine = initialize_ml_engine()
-            if ml_engine and ml_engine.is_loaded:
+            if ml_engine and hasattr(ml_engine, 'is_loaded') and ml_engine.is_loaded:
                 ml_monitoring_active = True
-                ml_engine.start_monitoring()
+                if hasattr(ml_engine, 'start_monitoring'):
+                    ml_engine.start_monitoring()
                 app.logger.info("ML engine auto-initialized from status endpoint")
         except Exception as e:
             app.logger.error(f"Auto-initialization failed in status: {e}")
     
-    if ml_engine and ml_engine.is_loaded:
-        stats = ml_engine.get_attack_statistics()
+    if ml_engine and hasattr(ml_engine, 'is_loaded') and ml_engine.is_loaded:
+        stats = {}
+        if hasattr(ml_engine, 'get_attack_statistics'):
+            stats = ml_engine.get_attack_statistics()
         return json.dumps({
             'status': 'active',
             'monitoring': ml_monitoring_active,
@@ -460,6 +504,13 @@ def ml_status():
 @app.route('/ml/detections')
 def ml_detections():
     """Get recent attack detections"""
+    if not ML_ENGINE_AVAILABLE:
+        return json.dumps({
+            'error': 'ML engine not available',
+            'status': 'error',
+            'message': 'TensorFlow not installed'
+        }), 503
+    
     try:
         global ml_engine, ml_monitoring_active
         
@@ -467,9 +518,10 @@ def ml_detections():
         if not ml_engine:
             try:
                 ml_engine = initialize_ml_engine()
-                if ml_engine and ml_engine.is_loaded:
+                if ml_engine and hasattr(ml_engine, 'is_loaded') and ml_engine.is_loaded:
                     ml_monitoring_active = True
-                    ml_engine.start_monitoring()
+                    if hasattr(ml_engine, 'start_monitoring'):
+                        ml_engine.start_monitoring()
                     app.logger.info("ML engine auto-initialized from detections endpoint")
             except Exception as e:
                 app.logger.error(f"Auto-initialization failed in detections: {e}")
@@ -482,10 +534,13 @@ def ml_detections():
         if not ml_engine:
             return json.dumps({'error': 'ML engine not initialized', 'status': 'error'}), 503
 
-        if not ml_engine.is_loaded:
+        if not hasattr(ml_engine, 'is_loaded') or not ml_engine.is_loaded:
             return json.dumps({'error': 'ML model not loaded', 'status': 'error'}), 503
 
-        detections = list(ml_engine.attack_detections)[-20:]  # Get last 20 detections
+        if hasattr(ml_engine, 'attack_detections'):
+            detections = list(ml_engine.attack_detections)[-20:]  # Get last 20 detections
+        else:
+            detections = []
 
         # Ensure all data is JSON serializable
         clean_detections = []
@@ -518,48 +573,68 @@ def ml_detections():
 @app.route('/ml/analyze_packet', methods=['POST'])
 def analyze_packet():
     """Analyze a specific packet for attacks"""
+    if not ML_ENGINE_AVAILABLE:
+        return json.dumps({'error': 'ML engine not available (TensorFlow not installed)'})
+    
     global ml_engine
-    if not ml_engine or not ml_engine.is_loaded:
+    if not ml_engine or not hasattr(ml_engine, 'is_loaded') or not ml_engine.is_loaded:
         return json.dumps({'error': 'ML engine not initialized'})
     
     try:
         packet_data = request.json
-        result = ml_engine.predict_attack(packet_data)
-        return json.dumps(result)
+        if hasattr(ml_engine, 'predict_attack'):
+            result = ml_engine.predict_attack(packet_data)
+            return json.dumps(result)
+        else:
+            return json.dumps({'error': 'ML engine does not support packet analysis'})
     except Exception as e:
         return json.dumps({'error': f'Analysis failed: {str(e)}'})
 
 @app.route('/ml/statistics')
 def ml_statistics():
     """Get comprehensive ML statistics"""
+    if not ML_ENGINE_AVAILABLE:
+        return json.dumps({'error': 'ML engine not available (TensorFlow not installed)'})
+    
     global ml_engine
-    if ml_engine and ml_engine.is_loaded:
-        stats = ml_engine.get_attack_statistics()
-        return json.dumps(stats)
+    if ml_engine and hasattr(ml_engine, 'is_loaded') and ml_engine.is_loaded:
+        if hasattr(ml_engine, 'get_attack_statistics'):
+            stats = ml_engine.get_attack_statistics()
+            return json.dumps(stats)
+        else:
+            return json.dumps({'error': 'ML engine statistics not available'})
     else:
         return json.dumps({'error': 'ML engine not available'})
 
 def start_ml_engine():
     """Initialize and start the ML engine on app startup"""
+    if not ML_ENGINE_AVAILABLE:
+        print("⚠️  ML engine not available (TensorFlow not installed)")
+        print("   System will run with heuristic-based detection only")
+        return False
+        
     global ml_engine, ml_monitoring_active
     try:
         print("🚀 Initializing ML Security Engine...")
         ml_engine = initialize_ml_engine()
-        if ml_engine and ml_engine.is_loaded:
+        if ml_engine and hasattr(ml_engine, 'is_loaded') and ml_engine.is_loaded:
             ml_monitoring_active = True
-            ml_engine.start_monitoring()
+            if hasattr(ml_engine, 'start_monitoring'):
+                ml_engine.start_monitoring()
             print("✅ ML Security Engine initialized and monitoring started")
             return True
         else:
-            print("❌ Failed to initialize ML engine")
+            print("⚠️  ML engine initialization skipped (using heuristic detection)")
             return False
     except Exception as e:
-        print(f"❌ ML initialization failed: {str(e)}")
+        print(f"⚠️  ML initialization failed: {str(e)}")
+        print("   System will run with heuristic-based detection only")
         return False
 
 if __name__ == '__main__':
-    # Start ML engine before running the app
+    # Start ML engine before running the app (optional)
     start_ml_engine()
     
     # Run the Flask app
-    app.run(host='0.0.0.0', port=5000, use_reloader=False)  # disable reloader to prevent duplicate ML engine initialization
+    print("🌐 Starting Flask Controller on http://0.0.0.0:5000")
+    app.run(host='0.0.0.0', port=5000, use_reloader=False, debug=False)  # disable reloader to prevent duplicate ML engine initialization

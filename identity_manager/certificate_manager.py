@@ -7,12 +7,20 @@ import os
 import subprocess
 import logging
 from datetime import datetime, timedelta
-from cryptography import x509
-from cryptography.x509.oid import NameOID
-from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import rsa
-from cryptography.hazmat.backends import default_backend
 import tempfile
+
+# Try to import cryptography, but make it optional
+try:
+    from cryptography import x509
+    from cryptography.x509.oid import NameOID
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+    from cryptography.hazmat.backends import default_backend
+    CRYPTOGRAPHY_AVAILABLE = True
+except ImportError:
+    CRYPTOGRAPHY_AVAILABLE = False
+    logger = logging.getLogger(__name__)
+    logger.warning("cryptography module not available. Certificate features will be limited.")
 
 logger = logging.getLogger(__name__)
 
@@ -36,12 +44,19 @@ class CertificateManager:
         os.makedirs(certs_dir, exist_ok=True)
         os.makedirs(os.path.dirname(ca_cert_path) if os.path.dirname(ca_cert_path) else ".", exist_ok=True)
         
-        # Initialize CA if it doesn't exist
-        if not os.path.exists(ca_cert_path) or not os.path.exists(ca_key_path):
+        # Initialize CA if it doesn't exist (only if cryptography is available)
+        if CRYPTOGRAPHY_AVAILABLE and (not os.path.exists(ca_cert_path) or not os.path.exists(ca_key_path)):
             self._create_ca()
+        elif not CRYPTOGRAPHY_AVAILABLE:
+            logger.warning("cryptography not available - CA will not be created automatically")
     
     def _create_ca(self):
         """Create Certificate Authority (CA)"""
+        if not CRYPTOGRAPHY_AVAILABLE:
+            logger.error("Cannot create CA: cryptography module not available")
+            logger.warning("Install with: pip install cryptography")
+            return
+            
         try:
             logger.info("Creating Certificate Authority...")
             
@@ -108,6 +123,10 @@ class CertificateManager:
         Returns:
             Tuple of (certificate_path, key_path)
         """
+        if not CRYPTOGRAPHY_AVAILABLE:
+            logger.error("Cannot generate device certificate: cryptography module not available")
+            raise ImportError("cryptography module is required for certificate generation. Install with: pip install cryptography")
+            
         try:
             logger.info(f"Generating certificate for device {device_id}...")
             
@@ -187,6 +206,10 @@ class CertificateManager:
         Returns:
             True if valid, False otherwise
         """
+        if not CRYPTOGRAPHY_AVAILABLE:
+            logger.error("Cannot verify certificate: cryptography module not available")
+            return False
+            
         try:
             # Load CA certificate
             with open(self.ca_cert_path, "rb") as f:

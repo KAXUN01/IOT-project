@@ -13,11 +13,30 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
+# Check if running as root/sudo
+if [ "$EUID" -eq 0 ]; then
+    echo ""
+    echo -e "${YELLOW}⚠️  Warning: Running as root/sudo is not recommended${NC}"
+    echo -e "${YELLOW}   This may cause permission issues with log files and directories${NC}"
+    echo -e "${YELLOW}   Consider running without sudo: ./start.sh${NC}"
+    read -p "Continue anyway? [y/N]: " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        exit 1
+    fi
+    echo ""
+fi
+
 # Process IDs
 CONTROLLER_PID=""
 RYU_PID=""
 ZERO_TRUST_PID=""
 MININET_PID=""
+
+# Status flags to prevent repeated warnings
+RYU_STOPPED_REPORTED="false"
+ZERO_TRUST_STOPPED_REPORTED="false"
+MININET_STOPPED_REPORTED="false"
 
 # Cleanup function
 cleanup() {
@@ -40,19 +59,32 @@ cleanup() {
         kill $ZERO_TRUST_PID 2>/dev/null || true
     fi
     
-    if [ ! -z "$MININET_PID" ]; then
+    if [ ! -z "$MININET_PID" ] && kill -0 $MININET_PID 2>/dev/null; then
         echo "   Stopping Mininet topology (PID: $MININET_PID)..."
         kill $MININET_PID 2>/dev/null || true
+        # Mininet may need special cleanup
+        sudo mn -c 2>/dev/null || true
     fi
     
     # Wait for processes to terminate
     sleep 2
     
-    # Force kill if still running
-    pkill -f "controller.py" 2>/dev/null || true
-    pkill -f "ryu-manager" 2>/dev/null || true
-    pkill -f "zero_trust_integration.py" 2>/dev/null || true
-    pkill -f "mininet_topology.py" 2>/dev/null || true
+    # Force kill if still running (only if we have permission)
+    if [ "$EUID" -eq 0 ] || [ -z "$EUID" ]; then
+        pkill -f "controller.py" 2>/dev/null || true
+        pkill -f "ryu-manager" 2>/dev/null || true
+        pkill -f "zero_trust_integration.py" 2>/dev/null || true
+        pkill -f "mininet_topology.py" 2>/dev/null || true
+        pkill -f "mininet" 2>/dev/null || true
+        # Mininet cleanup may require sudo
+        sudo mn -c 2>/dev/null || true
+    else
+        pkill -u $USER -f "controller.py" 2>/dev/null || true
+        pkill -u $USER -f "ryu-manager" 2>/dev/null || true
+        pkill -u $USER -f "zero_trust_integration.py" 2>/dev/null || true
+        pkill -u $USER -f "mininet_topology.py" 2>/dev/null || true
+        pkill -u $USER -f "mininet" 2>/dev/null || true
+    fi
     
     echo -e "${GREEN}✅ All components stopped${NC}"
     exit 0
@@ -102,17 +134,136 @@ if [ -d "venv" ]; then
 else
     echo -e "${YELLOW}⚠️  Virtual environment not found, using system Python${NC}"
     PYTHON_CMD="python3"
+    
+    # Offer to install from requirements.txt
+    if [ -f "requirements.txt" ]; then
+        echo -e "${YELLOW}💡 Tip: You can install all dependencies from requirements.txt${NC}"
+        read -p "Install all dependencies from requirements.txt now? [Y/n]: " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+            echo -e "${BLUE}📦 Installing dependencies from requirements.txt...${NC}"
+            local pip_cmd=""
+            if command -v pip3 &> /dev/null; then
+                pip_cmd="pip3"
+            elif command -v pip &> /dev/null; then
+                pip_cmd="pip"
+            fi
+            
+            if [ ! -z "$pip_cmd" ]; then
+                if $pip_cmd install -q -r requirements.txt 2>/dev/null; then
+                    echo -e "${GREEN}✅ All dependencies installed successfully${NC}"
+                elif [ "$EUID" -ne 0 ] && sudo $pip_cmd install -q -r requirements.txt 2>/dev/null; then
+                    echo -e "${GREEN}✅ All dependencies installed successfully${NC}"
+                else
+                    echo -e "${YELLOW}⚠️  Some packages may have failed to install${NC}"
+                    echo -e "${YELLOW}   You can install manually later: $pip_cmd install -r requirements.txt${NC}"
+                fi
+            else
+                echo -e "${RED}❌ pip not found. Cannot install dependencies.${NC}"
+            fi
+        fi
+    fi
 fi
+
+# Function to install package (defined before use)
+install_package() {
+    local package_name=$1
+    local import_name=$2  # Optional: different import name
+    local pip_cmd=""
+    
+    # Use import_name if provided, otherwise derive from package_name
+    if [ -z "$import_name" ]; then
+        # Common mappings
+        case "$package_name" in
+            "pyOpenSSL") import_name="OpenSSL" ;;
+            "python-dotenv") import_name="dotenv" ;;
+            *) import_name="${package_name//-/_}" ;;
+        esac
+    fi
+    
+    # Determine pip command
+    if [ -d "venv" ] && [ -f "./venv/bin/pip" ]; then
+        pip_cmd="./venv/bin/pip"
+    elif [ -d "venv" ] && [ -f "./venv/bin/pip3" ]; then
+        pip_cmd="./venv/bin/pip3"
+    elif command -v pip3 &> /dev/null; then
+        pip_cmd="pip3"
+    elif command -v pip &> /dev/null; then
+        pip_cmd="pip"
+    else
+        echo -e "${RED}  ❌ pip not found. Cannot install packages.${NC}"
+        return 1
+    fi
+    
+    echo -e "${YELLOW}     Installing $package_name...${NC}"
+    
+    # Try installation (suppress output but show errors)
+    if $pip_cmd install --upgrade $package_name > /dev/null 2>&1; then
+        # Check if it can be imported
+        if $PYTHON_CMD -c "import $import_name" 2>/dev/null; then
+            echo -e "${GREEN}     ✅ $package_name installed successfully${NC}"
+            return 0
+        fi
+    fi
+    
+    # Try with sudo if not in venv and not root
+    if [ ! -d "venv" ] && [ "$EUID" -ne 0 ]; then
+        echo -e "${YELLOW}     Trying with sudo...${NC}"
+        if sudo $pip_cmd install --upgrade $package_name > /dev/null 2>&1; then
+            if $PYTHON_CMD -c "import $import_name" 2>/dev/null; then
+                echo -e "${GREEN}     ✅ $package_name installed successfully${NC}"
+                return 0
+            fi
+        fi
+    fi
+    
+    echo -e "${RED}     ❌ Failed to install $package_name${NC}"
+    return 1
+}
+
+# Special handler for ryu (needs eventlet too)
+install_ryu() {
+    if install_package "ryu" "ryu" && install_package "eventlet" "eventlet"; then
+        return 0
+    else
+        return 1
+    fi
+}
 
 # Check dependencies
 echo ""
 echo -e "${BLUE}📦 Checking dependencies...${NC}"
 
-# Check Flask
+# Check Flask (required)
 if $PYTHON_CMD -c "import flask" 2>/dev/null; then
     echo -e "${GREEN}  ✅ Flask${NC}"
 else
-    echo -e "${YELLOW}  ⚠️  Flask not found (will try to install)${NC}"
+    echo -e "${YELLOW}  ⚠️  Flask not found (required)${NC}"
+    if install_package "flask" "flask"; then
+        echo -e "${GREEN}  ✅ Flask${NC}"
+    else
+        echo -e "${RED}  ❌ Failed to install Flask. Please install manually: pip install flask${NC}"
+        exit 1
+    fi
+fi
+
+# Check cryptography (optional, for Zero Trust)
+if $PYTHON_CMD -c "import cryptography" 2>/dev/null; then
+    CRYPTOGRAPHY_AVAILABLE=true
+    echo -e "${GREEN}  ✅ cryptography${NC}"
+else
+    CRYPTOGRAPHY_AVAILABLE=false
+    echo -e "${YELLOW}  ⚠️  cryptography not found (optional, for certificates)${NC}"
+    read -p "     Install cryptography? [Y/n]: " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+        if install_package "cryptography" "cryptography"; then
+            CRYPTOGRAPHY_AVAILABLE=true
+            echo -e "${GREEN}  ✅ cryptography${NC}"
+        else
+            echo -e "${YELLOW}  ⚠️  cryptography installation failed (will skip Zero Trust features)${NC}"
+        fi
+    fi
 fi
 
 # Check Ryu (optional)
@@ -122,6 +273,16 @@ if command -v ryu-manager &> /dev/null || $PYTHON_CMD -c "import ryu" 2>/dev/nul
 else
     RYU_AVAILABLE=false
     echo -e "${YELLOW}  ⚠️  Ryu SDN Controller not found (optional)${NC}"
+    read -p "     Install Ryu? [y/N]: " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        if install_ryu; then
+            RYU_AVAILABLE=true
+            echo -e "${GREEN}  ✅ Ryu SDN Controller${NC}"
+        else
+            echo -e "${YELLOW}  ⚠️  Ryu installation failed (will skip SDN features)${NC}"
+        fi
+    fi
 fi
 
 # Check Docker (optional)
@@ -131,12 +292,36 @@ if command -v docker &> /dev/null && $PYTHON_CMD -c "import docker" 2>/dev/null;
 else
     DOCKER_AVAILABLE=false
     echo -e "${YELLOW}  ⚠️  Docker not found (optional, for honeypot)${NC}"
+    
+    # Check if docker command exists but Python module doesn't
+    if command -v docker &> /dev/null; then
+        echo -e "${YELLOW}     Docker command found, but Python module missing${NC}"
+        read -p "     Install docker Python module? [Y/n]: " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+        if install_package "docker" "docker"; then
+            DOCKER_AVAILABLE=true
+            echo -e "${GREEN}  ✅ Docker${NC}"
+        else
+            echo -e "${YELLOW}  ⚠️  Docker Python module installation failed${NC}"
+        fi
+        fi
+    else
+        echo -e "${YELLOW}     Docker not installed. Install with: sudo apt-get install docker.io${NC}"
+        echo -e "${YELLOW}     Or visit: https://docs.docker.com/get-docker/${NC}"
+    fi
 fi
 
 # Create necessary directories
 echo ""
 echo -e "${BLUE}📁 Setting up directories...${NC}"
 mkdir -p certs honeypot_data logs
+
+# Fix permissions if running as root
+if [ "$EUID" -eq 0 ] && [ ! -z "$SUDO_USER" ]; then
+    chown -R $SUDO_USER:$SUDO_USER certs honeypot_data logs 2>/dev/null || true
+fi
+
 echo -e "${GREEN}✅ Directories ready${NC}"
 
 # Start Flask Controller
@@ -149,39 +334,121 @@ echo -e "${GREEN}✅ Flask Controller started (PID: $CONTROLLER_PID)${NC}"
 # Wait for controller to be ready
 echo -e "${YELLOW}⏳ Waiting for controller to initialize...${NC}"
 CONTROLLER_READY=false
-for i in {1..30}; do
-    if curl -s http://localhost:5000 > /dev/null 2>&1; then
+
+# Function to check if controller is ready
+check_controller_ready() {
+    # First check if port 5000 is listening (more reliable)
+    if command -v netstat &> /dev/null; then
+        if netstat -tuln 2>/dev/null | grep -q ":5000 "; then
+            PORT_LISTENING=true
+        else
+            PORT_LISTENING=false
+        fi
+    elif command -v ss &> /dev/null; then
+        if ss -tuln 2>/dev/null | grep -q ":5000 "; then
+            PORT_LISTENING=true
+        else
+            PORT_LISTENING=false
+        fi
+    else
+        PORT_LISTENING=true  # Assume listening if we can't check
+    fi
+    
+    if [ "$PORT_LISTENING" = false ]; then
+        return 1
+    fi
+    
+    # Try curl first (with timeout)
+    if command -v curl &> /dev/null; then
+        HTTP_CODE=$(curl -s -o /dev/null -w '%{http_code}' --connect-timeout 2 --max-time 3 http://localhost:5000 2>/dev/null)
+        if [ "$HTTP_CODE" = "200" ]; then
+            return 0
+        fi
+    fi
+    
+    # Try wget (with timeout)
+    if command -v wget &> /dev/null; then
+        if wget -q -O /dev/null -T 2 http://localhost:5000 2>&1 | grep -q "200 OK"; then
+            return 0
+        fi
+    fi
+    
+    # Try python (with timeout)
+    if $PYTHON_CMD -c "import urllib.request, socket; socket.setdefaulttimeout(2); urllib.request.urlopen('http://localhost:5000').read()" 2>/dev/null; then
+        return 0
+    fi
+    
+    return 1
+}
+
+# Wait for controller (up to 40 seconds)
+for i in {1..40}; do
+    # Check if process is still running
+    if ! kill -0 $CONTROLLER_PID 2>/dev/null; then
+        echo ""
+        echo -e "${RED}❌ Controller process died!${NC}"
+        echo -e "${YELLOW}   Check logs/controller.log for errors:${NC}"
+        tail -30 logs/controller.log 2>/dev/null || echo "   (log file not found)"
+        cleanup
+        exit 1
+    fi
+    
+    # Check if controller is responding
+    if check_controller_ready; then
         echo ""
         echo -e "${GREEN}✅ Controller is ready!${NC}"
         CONTROLLER_READY=true
         break
     fi
+    
     sleep 1
-    echo -n "."
+    if [ $((i % 5)) -eq 0 ]; then
+        echo -n " [${i}s]"
+    else
+        echo -n "."
+    fi
 done
 
 if [ "$CONTROLLER_READY" = false ]; then
     echo ""
-    echo -e "${RED}❌ Controller failed to start within 30 seconds${NC}"
-    echo -e "${YELLOW}   Check logs/controller.log for errors${NC}"
-    cleanup
-    exit 1
+    echo -e "${YELLOW}⚠️  Controller not responding after 40 seconds${NC}"
+    echo -e "${YELLOW}   Process is running (PID: $CONTROLLER_PID)${NC}"
+    echo -e "${YELLOW}   Check logs/controller.log:${NC}"
+    tail -20 logs/controller.log 2>/dev/null || echo "   (log file not found)"
+    echo -e "${YELLOW}   Continuing anyway - controller may be starting slowly...${NC}"
 fi
 
 # Start Ryu SDN Controller (if available)
 if [ "$RYU_AVAILABLE" = true ]; then
     echo ""
     echo -e "${BLUE}🌐 Starting Ryu SDN Controller...${NC}"
-    if command -v ryu-manager &> /dev/null; then
-        ryu-manager ryu_controller/sdn_policy_engine.py > logs/ryu.log 2>&1 &
-        RYU_PID=$!
-        echo -e "${GREEN}✅ Ryu SDN Controller started (PID: $RYU_PID)${NC}"
+    
+    # Check if Ryu module file exists
+    if [ ! -f "ryu_controller/sdn_policy_engine.py" ]; then
+        echo -e "${YELLOW}⚠️  Ryu controller file not found: ryu_controller/sdn_policy_engine.py${NC}"
+        echo -e "${YELLOW}   Skipping Ryu SDN Controller${NC}"
+        RYU_AVAILABLE=false
     else
-        $PYTHON_CMD -m ryu.app.simple_switch_13 ryu_controller/sdn_policy_engine.py > logs/ryu.log 2>&1 &
-        RYU_PID=$!
-        echo -e "${GREEN}✅ Ryu SDN Controller started (PID: $RYU_PID)${NC}"
+        if command -v ryu-manager &> /dev/null; then
+            ryu-manager ryu_controller/sdn_policy_engine.py > logs/ryu.log 2>&1 &
+            RYU_PID=$!
+        else
+            $PYTHON_CMD -m ryu.app.simple_switch_13 ryu_controller/sdn_policy_engine.py > logs/ryu.log 2>&1 &
+            RYU_PID=$!
+        fi
+        
+        # Wait a moment and check if process is still running
+        sleep 2
+        if kill -0 $RYU_PID 2>/dev/null; then
+            echo -e "${GREEN}✅ Ryu SDN Controller started (PID: $RYU_PID)${NC}"
+        else
+            echo -e "${RED}❌ Ryu SDN Controller failed to start${NC}"
+            echo -e "${YELLOW}   Check logs/ryu.log for errors:${NC}"
+            tail -10 logs/ryu.log 2>/dev/null || echo "   (log file not found)"
+            RYU_PID=""
+            RYU_AVAILABLE=false
+        fi
     fi
-    sleep 3
 else
     echo ""
     echo -e "${YELLOW}⚠️  Skipping Ryu SDN Controller (not installed)${NC}"
@@ -192,10 +459,23 @@ fi
 echo ""
 echo -e "${BLUE}🔐 Starting Zero Trust Integration Framework...${NC}"
 if [ -f "zero_trust_integration.py" ]; then
-    $PYTHON_CMD zero_trust_integration.py > logs/zero_trust.log 2>&1 &
-    ZERO_TRUST_PID=$!
-    echo -e "${GREEN}✅ Zero Trust Framework started (PID: $ZERO_TRUST_PID)${NC}"
-    sleep 2
+    if [ "$CRYPTOGRAPHY_AVAILABLE" = true ]; then
+        $PYTHON_CMD zero_trust_integration.py > logs/zero_trust.log 2>&1 &
+        ZERO_TRUST_PID=$!
+        sleep 2
+        # Check if it's still running
+        if kill -0 $ZERO_TRUST_PID 2>/dev/null; then
+            echo -e "${GREEN}✅ Zero Trust Framework started (PID: $ZERO_TRUST_PID)${NC}"
+        else
+            echo -e "${RED}❌ Zero Trust Framework failed to start${NC}"
+            echo -e "${YELLOW}   Check logs/zero_trust.log for errors:${NC}"
+            tail -10 logs/zero_trust.log 2>/dev/null || echo "   (log file not found)"
+            ZERO_TRUST_PID=""
+        fi
+    else
+        echo -e "${YELLOW}⚠️  Skipping Zero Trust Framework (cryptography not installed)${NC}"
+        echo -e "${YELLOW}   Install with: pip install cryptography${NC}"
+    fi
 else
     echo -e "${YELLOW}⚠️  Zero Trust integration file not found, skipping${NC}"
 fi
@@ -252,6 +532,9 @@ fi
 if [ ! -z "$ZERO_TRUST_PID" ]; then
     echo -e "   • Zero Trust:        ${YELLOW}logs/zero_trust.log${NC}"
 fi
+if [ ! -z "$MININET_PID" ]; then
+    echo -e "   • Virtual Devices:   ${YELLOW}logs/mininet.log${NC}"
+fi
 
 echo ""
 echo -e "${YELLOW}⌨️  Press Ctrl+C to stop all components${NC}"
@@ -272,15 +555,39 @@ while true; do
         exit 1
     fi
     
-    # Check Ryu if it was started
+    # Check Ryu if it was started (only report once)
     if [ ! -z "$RYU_PID" ] && ! kill -0 $RYU_PID 2>/dev/null; then
-        echo -e "${YELLOW}⚠️  Ryu SDN Controller stopped${NC}"
+        if [ "$RYU_STOPPED_REPORTED" != "true" ]; then
+            echo ""
+            echo -e "${YELLOW}⚠️  Ryu SDN Controller stopped unexpectedly${NC}"
+            echo -e "${YELLOW}   Check logs/ryu.log for errors:${NC}"
+            tail -10 logs/ryu.log 2>/dev/null || echo "   (log file not found)"
+            RYU_STOPPED_REPORTED="true"
+        fi
         RYU_PID=""
     fi
     
-    # Check Zero Trust if it was started
+    # Check Zero Trust if it was started (only report once)
     if [ ! -z "$ZERO_TRUST_PID" ] && ! kill -0 $ZERO_TRUST_PID 2>/dev/null; then
-        echo -e "${YELLOW}⚠️  Zero Trust Framework stopped${NC}"
+        if [ "$ZERO_TRUST_STOPPED_REPORTED" != "true" ]; then
+            echo ""
+            echo -e "${YELLOW}⚠️  Zero Trust Framework stopped unexpectedly${NC}"
+            echo -e "${YELLOW}   Check logs/zero_trust.log for errors:${NC}"
+            tail -10 logs/zero_trust.log 2>/dev/null || echo "   (log file not found)"
+            ZERO_TRUST_STOPPED_REPORTED="true"
+        fi
         ZERO_TRUST_PID=""
+    fi
+    
+    # Check Mininet if it was started (only report once)
+    if [ ! -z "$MININET_PID" ] && ! kill -0 $MININET_PID 2>/dev/null; then
+        if [ "$MININET_STOPPED_REPORTED" != "true" ]; then
+            echo ""
+            echo -e "${YELLOW}⚠️  Virtual Devices (Mininet) stopped unexpectedly${NC}"
+            echo -e "${YELLOW}   Check logs/mininet.log for errors:${NC}"
+            tail -10 logs/mininet.log 2>/dev/null || echo "   (log file not found)"
+            MININET_STOPPED_REPORTED="true"
+        fi
+        MININET_PID=""
     fi
 done
