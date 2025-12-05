@@ -57,7 +57,8 @@ class ZeroTrustFramework:
         
         # Trust Evaluation
         self.trust_scorer = TrustScorer(
-            initial_score=self.config.get('initial_trust_score', 70)
+            initial_score=self.config.get('initial_trust_score', 70),
+            identity_db=self.onboarding.identity_db
         )
         self.attestation = DeviceAttestation(
             attestation_interval=self.config.get('attestation_interval', 300)
@@ -143,6 +144,9 @@ class ZeroTrustFramework:
         
         self.running = True
         
+        # Initialize trust scores for all devices in database
+        self._initialize_trust_scores_for_all_devices()
+        
         # Deploy honeypot
         logger.info("Deploying honeypot...")
         self.honeypot_deployer.deploy()
@@ -156,6 +160,24 @@ class ZeroTrustFramework:
         self._start_monitoring_threads()
         
         logger.info("Zero Trust Framework started")
+    
+    def _initialize_trust_scores_for_all_devices(self):
+        """Initialize trust scores for all devices in the database"""
+        try:
+            devices = self.onboarding.identity_db.get_all_devices()
+            initialized_count = 0
+            
+            for device in devices:
+                device_id = device['device_id']
+                # Initialize trust score if not already initialized
+                if device_id not in self.trust_scorer.device_scores:
+                    self.trust_scorer.initialize_device(device_id)
+                    initialized_count += 1
+            
+            if initialized_count > 0:
+                logger.info(f"Initialized trust scores for {initialized_count} devices")
+        except Exception as e:
+            logger.error(f"Error initializing trust scores for all devices: {e}")
     
     def stop(self):
         """Stop the Zero Trust Framework"""
@@ -194,8 +216,14 @@ class ZeroTrustFramework:
                 
                 time.sleep(10)  # Check every 10 seconds
         
-        # Thread 2: Device attestation
+        # Thread 2: Device attestation - continuous lightweight attestation
         def perform_attestations():
+            # Start attestation for all devices
+            devices = self.onboarding.identity_db.get_all_devices()
+            for device in devices:
+                device_id = device['device_id']
+                self.attestation.start_attestation(device_id)
+            
             while self.running:
                 try:
                     devices = self.onboarding.identity_db.get_all_devices()
@@ -203,22 +231,27 @@ class ZeroTrustFramework:
                         device_id = device['device_id']
                         cert_path = device.get('certificate_path')
                         
-                        if cert_path:
-                            result = self.attestation.perform_attestation(
-                                device_id,
-                                cert_path,
-                                self.onboarding.cert_manager
-                            )
+                        # Start attestation if not already started
+                        if device_id not in self.attestation.device_attestations:
+                            self.attestation.start_attestation(device_id)
+                        
+                        # Perform attestation check
+                        result = self.attestation.perform_attestation(
+                            device_id,
+                            cert_path if cert_path else None,
+                            self.onboarding.cert_manager if cert_path else None
+                        )
+                        
+                        if not result['passed']:
+                            # Lower trust score on failed attestation
+                            logger.warning(f"Attestation failed for {device_id}: {result.get('checks', {})}")
+                            self.trust_scorer.record_attestation_failure(device_id)
+                            # Policy adapter will be notified via callback automatically
                             
-                            if not result['passed']:
-                                # Lower trust score
-                                self.trust_scorer.record_attestation_failure(device_id)
-                                # Adapt policy
-                                self.policy_adapter.adapt_policy_for_device(device_id)
                 except Exception as e:
                     logger.error(f"Error performing attestations: {e}")
                 
-                time.sleep(300)  # Check every 5 minutes
+                time.sleep(self.attestation.attestation_interval)  # Use configured interval
         
         # Thread 3: Policy adaptation based on trust scores
         def adapt_policies():

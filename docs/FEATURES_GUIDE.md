@@ -472,61 +472,125 @@ cert_path, key_path = cm.generate_device_certificate(
 
 #### 2. Continuous Attestation
 
-**Purpose**: Periodic device verification
+**Purpose**: Lightweight periodic device integrity verification
 
 **How It Works**:
-- Verifies device certificates every 5 minutes
-- Checks certificate validity
-- Validates device integrity
-- Updates trust scores based on results
+- Verifies device certificates at configurable intervals (default: 5 minutes)
+- Checks certificate validity and expiration
+- Validates device heartbeat (device is alive and responding)
+- Automatically starts attestation for all onboarded devices
+- Lowers trust score on failed attestation checks
+- Communicates attestation failures to Policy Engine for adaptive access control
+
+**Features**:
+- **Lightweight**: Minimal overhead with efficient checks
+- **Continuous**: Runs automatically in background thread
+- **Integrated**: Automatically adjusts trust scores and policies
+- **Configurable**: Attestation interval can be adjusted per deployment
 
 **Usage**:
 ```python
 from trust_evaluator.device_attestation import DeviceAttestation
 
-attestation = DeviceAttestation(attestation_interval=300)
+attestation = DeviceAttestation(attestation_interval=300)  # 5 minutes
+attestation.start_attestation("ESP32_2")
 result = attestation.perform_attestation(
     device_id="ESP32_2",
     cert_path="certs/ESP32_2.crt",
     cert_manager=cm
 )
+
+if not result['passed']:
+    # Trust score automatically lowered
+    # Policy automatically adapted
+    print(f"Attestation failed: {result['checks']}")
 ```
 
-#### 3. Trust Scoring
+#### 3. Dynamic Trust Scoring
 
-**Purpose**: Dynamic trust evaluation (0-100 scale)
+**Purpose**: Dynamic trust evaluation system for adaptive Zero Trust (0-100 scale)
+
+**Key Features**:
+- **Persistent Storage**: Trust scores stored in identity database
+- **Automatic Initialization**: Trust scores initialized for all devices on startup
+- **Real-time Updates**: Trust scores updated based on behavioral heuristics and attestation results
+- **Immediate Policy Adaptation**: Policy Engine notified immediately when trust scores change
+- **Score History**: Complete history of trust score changes tracked in database
 
 **Trust Score Factors**:
-- Behavioral anomalies: -10 to -30
-- Attestation failures: -20
-- Security alerts: -5 to -15 (severity-based)
-- Time-based decay: -1 per day
+- Behavioral anomalies: -5 to -30 (based on severity: low/medium/high)
+- Attestation failures: -20 points per failure
+- Security alerts from Analyst: -10 to -40 (based on severity: low/medium/high)
+- Positive behavior: +2 points for good behavior
+
+**Trust Score Thresholds**:
+- **≥ 70**: Trusted - Full access (ALLOW)
+- **50-69**: Monitored - Restricted access (REDIRECT to monitoring)
+- **30-49**: Suspicious - Limited access (DENY)
+- **< 30**: Untrusted - Quarantined (QUARANTINE)
 
 **Usage**:
 ```python
 from trust_evaluator.trust_scorer import TrustScorer
+from identity_manager.identity_database import IdentityDatabase
 
-scorer = TrustScorer(initial_score=70)
+identity_db = IdentityDatabase(db_path="identity.db")
+scorer = TrustScorer(initial_score=70, identity_db=identity_db)
+
+# Initialize device (automatically loads from DB if exists)
+scorer.initialize_device("ESP32_2")
+
+# Get current score
 score = scorer.get_trust_score("ESP32_2")
+
+# Adjust score (automatically persists to DB and notifies Policy Engine)
 scorer.adjust_trust_score("ESP32_2", -10, "Behavioral anomaly detected")
+
+# Record Analyst alert (automatically adjusts score)
+scorer.record_security_alert("ESP32_2", "DDoS", "high")
+
+# Record attestation failure (automatically adjusts score)
+scorer.record_attestation_failure("ESP32_2")
+
+# Get score history
+history = scorer.get_score_history("ESP32_2", limit=50)
 ```
 
 #### 4. Policy Adaptation
 
-**Purpose**: Access control based on trust scores
+**Purpose**: Adaptive access control based on dynamic trust scores
 
-**Trust Levels**:
-- **High (80-100)**: Full access, normal policies
-- **Medium (50-79)**: Restricted access, enhanced monitoring
-- **Low (20-49)**: Limited access, strict policies
-- **Critical (0-19)**: Quarantined, no access
+**Key Features**:
+- **Automatic Adaptation**: Policies automatically updated when trust scores change
+- **Immediate Response**: Policy Engine notified via callback mechanism when trust scores cross thresholds
+- **Threshold-based Actions**: Different access levels based on trust score ranges
+- **Policy History**: Complete history of policy changes tracked
+
+**Trust Score to Policy Mapping**:
+- **≥ 70**: ALLOW - Full access, normal policies
+- **50-69**: REDIRECT - Traffic redirected to monitoring/honeypot
+- **30-49**: DENY - Access denied, strict policies
+- **< 30**: QUARANTINE - Device quarantined, isolated from network
+
+**Automatic Triggers**:
+- Trust score crosses threshold (30, 50, 70)
+- Significant trust score change (≥10 points)
+- Analyst alerts received
+- Attestation failures detected
 
 **Usage**:
 ```python
 from trust_evaluator.policy_adapter import PolicyAdapter
+from ryu_controller.sdn_policy_engine import SDNPolicyEngine
 
-adapter = PolicyAdapter(trust_scorer=scorer)
+adapter = PolicyAdapter(trust_scorer=scorer, sdn_policy_engine=sdn_engine)
+
+# Policy automatically adapted when trust score changes
+# Manual adaptation also available:
 adapter.adapt_policy_for_device("ESP32_2")
+
+# Get policy history
+history = adapter.get_policy_history("ESP32_2", limit=50)
 ```
 
 ### Zero Trust Workflow
@@ -536,25 +600,36 @@ Device Onboarding
     ↓
 Certificate Generation
     ↓
-Initial Trust Score (70)
+Initial Trust Score (70) → Stored in Identity DB
     ↓
-Behavioral Baseline
+Behavioral Baseline Establishment
     ↓
-Continuous Monitoring
+Continuous Monitoring (Parallel):
+    ├─→ Continuous Attestation (every 5 min)
+    │   └─→ Lower trust score on failure
+    ├─→ Heuristic Analyst (real-time)
+    │   └─→ Detect anomalies → Lower trust score
+    └─→ Flow Statistics Analysis
+        └─→ Behavioral anomalies → Lower trust score
     ↓
-Trust Score Updates
+Trust Score Changes → Persisted to DB
     ↓
-Policy Adaptation
+Automatic Policy Adaptation (via callback)
     ↓
-Access Control
+SDN Policy Engine Updates Access Control
+    ↓
+Adaptive Zero Trust Access Control
 ```
 
 ### Best Practices
 
 1. **Start with high trust**: New devices get initial score of 70
-2. **Monitor continuously**: Regular attestation and behavioral analysis
-3. **Adapt quickly**: Lower trust scores trigger immediate policy changes
-4. **Document changes**: Log all trust score adjustments
+2. **Monitor continuously**: Regular attestation (every 5 minutes) and real-time behavioral analysis
+3. **Adapt quickly**: Trust score changes trigger immediate policy adaptation via callbacks
+4. **Persist scores**: Trust scores automatically stored in identity database for persistence
+5. **Track history**: Complete audit trail of trust score and policy changes
+6. **Configure intervals**: Adjust attestation interval based on network requirements
+7. **Review thresholds**: Customize trust score thresholds for different device types
 
 ### Troubleshooting
 
@@ -946,39 +1021,72 @@ policy = generator.generate_policy(
 
 ### Overview
 
-Dynamic trust scoring system evaluates device trustworthiness based on multiple factors and adjusts access control accordingly.
+**Dynamic Trust Scoring for Adaptive Zero Trust**: A comprehensive trust scoring system that provides quantifiable trust measures for SOHO devices based on multiple factors, including behavioral heuristics (from the Analyst module) and device integrity checks (attestation). This score enables the Policy Engine to make adaptive, fine-grained access control decisions, which is a core tenet of a true Zero Trust model.
+
+### Key Features
+
+1. **Database Persistence**: Trust scores stored in identity database for persistence across restarts
+2. **Automatic Initialization**: Trust scores automatically initialized for all devices on framework startup
+3. **Real-time Updates**: Trust scores updated in real-time based on:
+   - Behavioral anomalies from Heuristic Analyst
+   - Attestation failures from continuous device attestation
+   - Security alerts from various detection modules
+4. **Immediate Policy Communication**: Policy Engine notified immediately when trust scores change via callback mechanism
+5. **Complete History**: Full audit trail of trust score changes stored in database
 
 ### Trust Score Calculation
 
-**Initial Score**: 70 (for new devices)
+**Initial Score**: 70 (for new devices, stored in database)
 
 **Adjustments**:
-- Behavioral Anomaly: -10 to -30 points
+- Behavioral Anomaly (Low): -5 points
+- Behavioral Anomaly (Medium): -15 points
+- Behavioral Anomaly (High): -30 points
 - Attestation Failure: -20 points
-- Security Alert (Low): -5 points
-- Security Alert (Medium): -10 points
-- Security Alert (High): -15 points
-- Time Decay: -1 point per day of inactivity
+- Security Alert (Low): -10 points
+- Security Alert (Medium): -20 points
+- Security Alert (High): -40 points
+- Positive Behavior: +2 points
 
 **Final Score**: Clamped to 0-100 range
+
+### Trust Score to Policy Mapping
+
+- **≥ 70**: ALLOW - Full access
+- **50-69**: REDIRECT - Traffic redirected to monitoring
+- **30-49**: DENY - Access denied
+- **< 30**: QUARANTINE - Device quarantined
 
 ### Usage
 
 ```python
 from trust_evaluator.trust_scorer import TrustScorer
+from identity_manager.identity_database import IdentityDatabase
 
-scorer = TrustScorer(initial_score=70)
+# Initialize with database for persistence
+identity_db = IdentityDatabase(db_path="identity.db")
+scorer = TrustScorer(initial_score=70, identity_db=identity_db)
 
-# Initialize device
+# Initialize device (loads from DB if exists, otherwise creates new)
 scorer.initialize_device("ESP32_2")
 
 # Get current score
 score = scorer.get_trust_score("ESP32_2")
 
-# Adjust score
+# Adjust score (automatically persists to DB and notifies Policy Engine)
 scorer.adjust_trust_score("ESP32_2", -10, "Behavioral anomaly")
 
-# Record security alert
+# Record security alert (automatically adjusts score)
+scorer.record_security_alert("ESP32_2", "DDoS", "high")
+
+# Record attestation failure (automatically adjusts score)
+scorer.record_attestation_failure("ESP32_2")
+
+# Get score history from database
+history = scorer.get_score_history("ESP32_2", limit=50)
+
+# Get all trust scores
+all_scores = scorer.get_all_scores()
 scorer.record_security_alert("ESP32_2", "DoS", "high")
 
 # Get all scores

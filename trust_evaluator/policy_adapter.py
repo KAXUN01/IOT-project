@@ -22,6 +22,10 @@ class PolicyAdapter:
         self.trust_scorer = trust_scorer
         self.sdn_policy_engine = sdn_policy_engine
         self.policy_history = {}  # {device_id: [(timestamp, old_policy, new_policy)]}
+        
+        # Register as callback for trust score changes
+        if self.trust_scorer:
+            self.trust_scorer.register_change_callback(self.on_trust_score_change)
     
     def adapt_policy_for_device(self, device_id: str) -> Optional[str]:
         """
@@ -135,4 +139,33 @@ class PolicyAdapter:
         """
         self.sdn_policy_engine = sdn_policy_engine
         logger.info("SDN policy engine connected")
+    
+    def on_trust_score_change(self, device_id: str, old_score: int, new_score: int, reason: str):
+        """
+        Callback method called when trust score changes
+        
+        Args:
+            device_id: Device identifier
+            old_score: Previous trust score
+            new_score: New trust score
+            reason: Reason for change
+        """
+        # Only adapt policy if score crossed a threshold
+        thresholds = [30, 50, 70]
+        old_threshold = None
+        new_threshold = None
+        
+        for threshold in thresholds:
+            if old_score >= threshold:
+                old_threshold = threshold
+            if new_score >= threshold:
+                new_threshold = threshold
+        
+        # If threshold changed, adapt policy immediately
+        if old_threshold != new_threshold:
+            logger.info(f"Trust score threshold crossed for {device_id}: {old_score} -> {new_score}, adapting policy")
+            self.adapt_policy_for_device(device_id)
+        elif abs(old_score - new_score) >= 10:  # Significant change (>= 10 points)
+            logger.info(f"Significant trust score change for {device_id}: {old_score} -> {new_score}, adapting policy")
+            self.adapt_policy_for_device(device_id)
 

@@ -5,7 +5,7 @@ Dynamic trust score calculation based on behavioral and attestation factors
 
 import logging
 import time
-from typing import Dict, Optional
+from typing import Dict, Optional, Callable, List
 from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
@@ -13,16 +13,23 @@ logger = logging.getLogger(__name__)
 class TrustScorer:
     """Calculates and manages dynamic trust scores for devices"""
     
-    def __init__(self, initial_score: int = 70):
+    def __init__(self, initial_score: int = 70, identity_db=None):
         """
         Initialize trust scorer
         
         Args:
             initial_score: Initial trust score for new devices (0-100)
+            identity_db: Identity database instance for persistence (optional)
         """
         self.initial_score = initial_score
+        self.identity_db = identity_db
         self.device_scores = {}  # {device_id: {'score': int, 'history': [], 'factors': {}}}
         self.score_history = {}  # {device_id: [(timestamp, score, reason)]}
+        self.change_callbacks: List[Callable] = []  # Callbacks for trust score changes
+        
+        # Load existing trust scores from database if available
+        if self.identity_db:
+            self._load_trust_scores_from_db()
     
     def initialize_device(self, device_id: str, initial_score: Optional[int] = None):
         """
@@ -32,7 +39,17 @@ class TrustScorer:
             device_id: Device identifier
             initial_score: Initial score (default: self.initial_score)
         """
-        score = initial_score if initial_score is not None else self.initial_score
+        # Check if device already has a trust score in database
+        if self.identity_db:
+            db_score = self.identity_db.get_trust_score(device_id)
+            if db_score is not None:
+                score = db_score
+                logger.info(f"Loaded existing trust score from database for {device_id}: {score}")
+            else:
+                score = initial_score if initial_score is not None else self.initial_score
+        else:
+            score = initial_score if initial_score is not None else self.initial_score
+        
         self.device_scores[device_id] = {
             'score': score,
             'history': [],
@@ -46,6 +63,11 @@ class TrustScorer:
         }
         
         self._record_score_change(device_id, score, "Initialized")
+        
+        # Persist to database
+        if self.identity_db:
+            self.identity_db.save_trust_score(device_id, score, "Initialized")
+        
         logger.info(f"Trust score initialized for {device_id}: {score}")
     
     def get_trust_score(self, device_id: str) -> Optional[int]:
@@ -92,6 +114,13 @@ class TrustScorer:
         
         self._record_score_change(device_id, new_score, reason)
         
+        # Persist to database
+        if self.identity_db:
+            self.identity_db.save_trust_score(device_id, new_score, reason)
+        
+        # Notify callbacks of trust score change
+        self._notify_score_change(device_id, current_score, new_score, reason)
+        
         logger.info(f"Trust score adjusted for {device_id}: {current_score} -> {new_score} ({adjustment:+d}) - {reason}")
         
         return new_score
@@ -115,6 +144,13 @@ class TrustScorer:
         self.device_scores[device_id]['last_updated'] = time.time()
         
         self._record_score_change(device_id, new_score, reason)
+        
+        # Persist to database
+        if self.identity_db:
+            self.identity_db.save_trust_score(device_id, new_score, reason)
+        
+        # Notify callbacks of trust score change
+        self._notify_score_change(device_id, old_score, new_score, reason)
         
         logger.info(f"Trust score set for {device_id}: {old_score} -> {new_score} - {reason}")
         
@@ -274,4 +310,62 @@ class TrustScorer:
             return 'suspicious'
         else:
             return 'untrusted'
+    
+    def register_change_callback(self, callback: Callable[[str, int, int, str], None]):
+        """
+        Register a callback function to be called when trust scores change
+        
+        Args:
+            callback: Function that takes (device_id, old_score, new_score, reason)
+        """
+        self.change_callbacks.append(callback)
+        logger.info(f"Registered trust score change callback: {callback.__name__}")
+    
+    def _notify_score_change(self, device_id: str, old_score: int, new_score: int, reason: str):
+        """
+        Notify all registered callbacks of a trust score change
+        
+        Args:
+            device_id: Device identifier
+            old_score: Previous trust score
+            new_score: New trust score
+            reason: Reason for change
+        """
+        for callback in self.change_callbacks:
+            try:
+                callback(device_id, old_score, new_score, reason)
+            except Exception as e:
+                logger.error(f"Error in trust score change callback {callback.__name__}: {e}")
+    
+    def _load_trust_scores_from_db(self):
+        """Load all trust scores from database"""
+        try:
+            scores = self.identity_db.load_all_trust_scores()
+            for device_id, score in scores.items():
+                self.device_scores[device_id] = {
+                    'score': score,
+                    'history': [],
+                    'factors': {
+                        'behavioral': 0,
+                        'attestation': 0,
+                        'alerts': 0,
+                        'time_based': 0
+                    },
+                    'last_updated': time.time()
+                }
+            logger.info(f"Loaded {len(scores)} trust scores from database")
+        except Exception as e:
+            logger.warning(f"Failed to load trust scores from database: {e}")
+    
+    def set_identity_db(self, identity_db):
+        """
+        Set identity database for persistence
+        
+        Args:
+            identity_db: Identity database instance
+        """
+        self.identity_db = identity_db
+        if identity_db:
+            self._load_trust_scores_from_db()
+            logger.info("Identity database connected for trust score persistence")
 

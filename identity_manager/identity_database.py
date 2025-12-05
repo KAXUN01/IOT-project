@@ -69,6 +69,24 @@ class IdentityDatabase:
                 )
             ''')
             
+            # Trust score history table
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS trust_score_history (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    device_id TEXT NOT NULL,
+                    trust_score INTEGER NOT NULL,
+                    reason TEXT,
+                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (device_id) REFERENCES devices(device_id)
+                )
+            ''')
+            
+            # Create index on device_id for faster queries
+            cursor.execute('''
+                CREATE INDEX IF NOT EXISTS idx_trust_score_history_device 
+                ON trust_score_history(device_id, timestamp)
+            ''')
+            
             # Migrate existing databases to add new columns if they don't exist
             self._migrate_database(conn)
             
@@ -104,6 +122,11 @@ class IdentityDatabase:
             if 'device_fingerprint' not in columns:
                 cursor.execute('ALTER TABLE devices ADD COLUMN device_fingerprint TEXT')
                 logger.info("Added device_fingerprint column to devices table")
+            
+            # Add trust_score column if it doesn't exist
+            if 'trust_score' not in columns:
+                cursor.execute('ALTER TABLE devices ADD COLUMN trust_score INTEGER DEFAULT 70')
+                logger.info("Added trust_score column to devices table")
             
         except Exception as e:
             logger.warning(f"Database migration warning: {e}")
@@ -151,13 +174,19 @@ class IdentityDatabase:
                     else:
                         first_seen = existing_first_seen
             
+            # Get existing trust_score if device exists
+            existing = self.get_device(device_id)
+            trust_score = 70  # Default initial trust score
+            if existing and existing.get('trust_score') is not None:
+                trust_score = existing['trust_score']
+            
             cursor.execute('''
                 INSERT OR REPLACE INTO devices 
                 (device_id, mac_address, certificate_path, key_path, device_type, device_info, 
-                 last_seen, physical_identity, device_fingerprint, first_seen)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 last_seen, physical_identity, device_fingerprint, first_seen, trust_score)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (device_id, mac_address, certificate_path, key_path, device_type, device_info, 
-                  datetime.utcnow(), physical_identity, device_fingerprint, first_seen))
+                  datetime.utcnow(), physical_identity, device_fingerprint, first_seen, trust_score))
             
             conn.commit()
             conn.close()
@@ -415,4 +444,122 @@ class IdentityDatabase:
         except Exception as e:
             logger.error(f"Failed to get policy: {e}")
             return None
+    
+    def save_trust_score(self, device_id: str, trust_score: int, reason: str = None) -> bool:
+        """
+        Save trust score for a device
+        
+        Args:
+            device_id: Device identifier
+            trust_score: Trust score (0-100)
+            reason: Reason for the score (optional)
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            # Update trust score in devices table
+            cursor.execute('UPDATE devices SET trust_score = ? WHERE device_id = ?', 
+                          (trust_score, device_id))
+            
+            # Add to history
+            cursor.execute('''
+                INSERT INTO trust_score_history (device_id, trust_score, reason, timestamp)
+                VALUES (?, ?, ?, ?)
+            ''', (device_id, trust_score, reason, datetime.utcnow()))
+            
+            conn.commit()
+            conn.close()
+            
+            logger.debug(f"Trust score saved for {device_id}: {trust_score}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to save trust score for {device_id}: {e}")
+            return False
+    
+    def get_trust_score(self, device_id: str) -> Optional[int]:
+        """
+        Get current trust score for a device
+        
+        Args:
+            device_id: Device identifier
+            
+        Returns:
+            Trust score (0-100) or None if device not found
+        """
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            cursor.execute('SELECT trust_score FROM devices WHERE device_id = ?', (device_id,))
+            row = cursor.fetchone()
+            
+            conn.close()
+            
+            if row and row[0] is not None:
+                return int(row[0])
+            return None
+            
+        except Exception as e:
+            logger.error(f"Failed to get trust score for {device_id}: {e}")
+            return None
+    
+    def get_trust_score_history(self, device_id: str, limit: int = 100) -> List[Dict]:
+        """
+        Get trust score history for a device
+        
+        Args:
+            device_id: Device identifier
+            limit: Maximum number of history entries
+            
+        Returns:
+            List of trust score history dictionaries
+        """
+        try:
+            conn = sqlite3.connect(self.db_path)
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                SELECT trust_score, reason, timestamp 
+                FROM trust_score_history 
+                WHERE device_id = ? 
+                ORDER BY timestamp DESC 
+                LIMIT ?
+            ''', (device_id, limit))
+            
+            rows = cursor.fetchall()
+            conn.close()
+            
+            return [dict(row) for row in rows]
+            
+        except Exception as e:
+            logger.error(f"Failed to get trust score history for {device_id}: {e}")
+            return []
+    
+    def load_all_trust_scores(self) -> Dict[str, int]:
+        """
+        Load all trust scores from database
+        
+        Returns:
+            Dictionary mapping device_id to trust_score
+        """
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            cursor.execute('SELECT device_id, trust_score FROM devices WHERE trust_score IS NOT NULL')
+            rows = cursor.fetchall()
+            
+            conn.close()
+            
+            return {device_id: int(trust_score) for device_id, trust_score in rows}
+            
+        except Exception as e:
+            logger.error(f"Failed to load trust scores: {e}")
+            return {}
 
