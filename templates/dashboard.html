@@ -63,132 +63,6 @@
             margin-bottom: 1rem;
         }
 
-        .quick-access {
-            display: flex;
-            gap: 0.75rem;
-            margin-bottom: 1rem;
-            flex-wrap: wrap;
-        }
-
-        .quick-access-btn {
-            padding: 0.5rem 1rem;
-            background: var(--card-bg);
-            border: 1px solid var(--border-color);
-            color: var(--text-primary);
-            text-decoration: none;
-            border-radius: 6px;
-            font-size: 0.875rem;
-            font-weight: 500;
-            transition: all var(--transition-fast);
-            display: inline-flex;
-            align-items: center;
-            gap: 0.5rem;
-            cursor: pointer;
-        }
-
-        .quick-access-btn:hover {
-            background: var(--accent-color);
-            border-color: var(--accent-color);
-            transform: translateY(-1px);
-            box-shadow: var(--shadow-sm);
-        }
-
-        .quick-access-btn.security-alerts {
-            border-left: 3px solid var(--danger-color);
-        }
-
-        .quick-access-btn.honeypot-status {
-            border-left: 3px solid var(--warning-color);
-        }
-
-        .quick-access-btn::before {
-            content: '🔗';
-            font-size: 1rem;
-        }
-
-        .api-modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.8);
-            z-index: 10000;
-            backdrop-filter: blur(5px);
-            overflow-y: auto;
-        }
-
-        .api-modal.active {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 2rem;
-        }
-
-        .api-modal-content {
-            background: var(--secondary-bg);
-            border: 1px solid var(--border-color);
-            border-radius: 12px;
-            padding: 2rem;
-            max-width: 900px;
-            width: 100%;
-            max-height: 90vh;
-            overflow-y: auto;
-            box-shadow: var(--shadow-lg);
-        }
-
-        .api-modal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 1.5rem;
-            padding-bottom: 1rem;
-            border-bottom: 1px solid var(--border-color);
-        }
-
-        .api-modal-header h2 {
-            font-size: 1.5rem;
-            font-weight: 600;
-            color: var(--text-primary);
-        }
-
-        .api-modal-close {
-            background: transparent;
-            border: 1px solid var(--border-color);
-            color: var(--text-secondary);
-            padding: 0.5rem 1rem;
-            border-radius: 6px;
-            cursor: pointer;
-            transition: all var(--transition-fast);
-        }
-
-        .api-modal-close:hover {
-            background: var(--danger-color);
-            border-color: var(--danger-color);
-            color: var(--text-primary);
-        }
-
-        .api-data {
-            background: var(--card-bg);
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            padding: 1rem;
-            font-family: 'Courier New', monospace;
-            font-size: 0.875rem;
-            white-space: pre-wrap;
-            word-wrap: break-word;
-            max-height: 60vh;
-            overflow-y: auto;
-            color: var(--text-primary);
-        }
-
-        .api-data.loading {
-            text-align: center;
-            padding: 2rem;
-            color: var(--text-secondary);
-        }
-
         .tab-navigation {
             display: flex;
             gap: 0.5rem;
@@ -1190,14 +1064,6 @@
 <body>
     <header class="dashboard-header">
         <h1>SecureIoT Command Center</h1>
-        <div class="quick-access">
-            <button onclick="showApiData('/api/alerts/suspicious_devices', 'Security Alerts')" class="quick-access-btn security-alerts" title="View Security Alerts API">
-                Security Alerts API
-            </button>
-            <button onclick="showApiData('/api/honeypot/redirected_devices', 'Honeypot Status')" class="quick-access-btn honeypot-status" title="View Honeypot Status API">
-                Honeypot Status API
-            </button>
-        </div>
         <nav class="tab-navigation" role="tablist" aria-label="Main Navigation">
             <button class="tab-button active" data-tab="overview" role="tab" aria-controls="overview" tabindex="0">Overview</button>
             <button class="tab-button" data-tab="devices" role="tab" aria-controls="devices" tabindex="0">Devices</button>
@@ -2751,54 +2617,6 @@
                 });
             });
         });
-
-        // API Data Modal Functions
-        function showApiData(url, title) {
-            const modal = document.getElementById('api-modal');
-            const modalTitle = document.getElementById('api-modal-title');
-            const modalData = document.getElementById('api-modal-data');
-            
-            modalTitle.textContent = title;
-            modalData.textContent = 'Loading...';
-            modalData.className = 'api-data loading';
-            modal.classList.add('active');
-            
-            fetch(url)
-                .then(response => response.json())
-                .then(data => {
-                    modalData.textContent = JSON.stringify(data, null, 2);
-                    modalData.className = 'api-data';
-                })
-                .catch(error => {
-                    modalData.textContent = `Error: ${error.message}`;
-                    modalData.className = 'api-data';
-                });
-        }
-
-        function closeApiModal() {
-            document.getElementById('api-modal').classList.remove('active');
-        }
-
-        // Close modal on outside click
-        document.addEventListener('DOMContentLoaded', () => {
-            const modal = document.getElementById('api-modal');
-            modal.addEventListener('click', (e) => {
-                if (e.target === modal) {
-                    closeApiModal();
-                }
-            });
-        });
     </script>
-
-    <!-- API Data Modal -->
-    <div id="api-modal" class="api-modal">
-        <div class="api-modal-content">
-            <div class="api-modal-header">
-                <h2 id="api-modal-title">API Data</h2>
-                <button class="api-modal-close" onclick="closeApiModal()">Close</button>
-            </div>
-            <div id="api-modal-data" class="api-data">Loading...</div>
-        </div>
-    </div>
 </body>
 </html>
