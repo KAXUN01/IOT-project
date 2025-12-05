@@ -234,17 +234,56 @@ Actions:
 - Flow rule generation and installation
 - Policy enforcement
 - Traffic redirection
+- **Policy translation from Identity module to OpenFlow rules**
+- **Threat alert handling from Analyst module**
+- **Dynamic rule installation based on threat intelligence**
 
 **Key Components**:
 - `SDNPolicyEngine`: Main Ryu application
 - `OpenFlowRuleGenerator`: Rule generation
 - `TrafficRedirector`: Honeypot redirection
+- `TrafficOrchestrator`: Central intelligent orchestration engine
 
 **Policy Types**:
 - **ALLOW**: Normal forwarding
 - **DENY**: Block traffic
 - **REDIRECT**: Send to honeypot
 - **QUARANTINE**: Isolate device
+
+**Policy Translation**:
+The SDN Policy Engine receives high-level policy definitions from the Identity module and translates them into granular OpenFlow rules:
+
+```python
+# High-level policy from Identity module
+policy = {
+    'device_id': 'ESP32_2',
+    'action': 'allow',
+    'rules': [
+        {'type': 'allow', 'match': {'ipv4_dst': '192.168.1.100'}, 'priority': 100},
+        {'type': 'allow', 'match': {'tcp_dst': 80}, 'priority': 100},
+        {'type': 'deny', 'match': {}, 'priority': 0}  # Default deny
+    ]
+}
+
+# Translated to OpenFlow rules:
+# - Rule 1: Allow traffic from device MAC to 192.168.1.100
+# - Rule 2: Allow TCP traffic from device MAC to port 80
+# - Rule 3: Deny all other traffic from device MAC
+```
+
+**Threat Alert Handling**:
+When the Analyst module detects anomalies, the SDN Policy Engine:
+1. Receives alert via `handle_analyst_alert(device_id, alert_type, severity)`
+2. Dynamically installs OpenFlow rules to redirect suspicious traffic to honeypot
+3. Applies mitigation actions based on confirmed threat intelligence
+4. Updates trust scores through the Trust module
+
+**Methods**:
+- `apply_policy_from_identity(device_id, policy)`: Translates high-level policies from Identity module to granular OpenFlow rules
+- `handle_analyst_alert(device_id, alert_type, severity)`: Handles threat alerts and applies dynamic rules
+- `set_analyst_module(analyst_module)`: Connects to Analyst module for threat detection
+- `set_identity_module(identity_module)`: Connects to Identity module for policy definitions
+- `set_trust_module(trust_module)`: Connects to Trust module for trust-based decisions
 
 #### 4.3 ML Security Engine
 
@@ -405,7 +444,41 @@ if data_transfer > 10 MB in 1 minute:
 - Data Storage: `honeypot_data/cowrie/`
 - Log Format: JSON
 
-#### 4.8 Zero Trust Integration
+#### 4.8 Traffic Orchestrator
+
+**File**: `ryu_controller/traffic_orchestrator.py`
+
+**Purpose**: Central intelligent orchestration engine for dynamic and multifaceted traffic orchestration
+
+**Responsibilities**:
+- Make intelligent policy decisions based on multiple real-time variables
+- Consider device identity, trust scores, and threat intelligence simultaneously
+- Enforce various security policies (allow, deny, redirect, quarantine)
+- Provide unified interface for policy decisions
+- Maintain audit trail of policy decisions
+
+**Decision Factors**:
+- Device identity and authentication status
+- Current trust score (0-100)
+- Active threat intelligence from Analyst module
+- Recent security alerts and their severity
+- Threat level assessment (none, low, medium, high, critical)
+
+**Policy Decision Logic**:
+1. Critical threat level → QUARANTINE
+2. High threat level → REDIRECT or QUARANTINE (based on trust)
+3. Trust score < 30 → QUARANTINE
+4. Trust score < 50 → DENY
+5. Medium threat level → REDIRECT
+6. Trust score < 70 → REDIRECT
+7. Low threat level → ALLOW (with monitoring)
+8. Trust score >= 70 → ALLOW
+
+**Methods**:
+- `orchestrate_policy(device_id, threat_intelligence)`: Makes intelligent policy decision
+- `get_decision_history(device_id, limit)`: Retrieves policy decision audit trail
+
+#### 4.9 Zero Trust Integration
 
 **File**: `zero_trust_integration.py`
 
@@ -417,11 +490,20 @@ if data_transfer > 10 MB in 1 minute:
 - Background monitoring threads
 - Event handling
 - Status reporting
+- Connect Analyst module to SDN Policy Engine
+- Integrate Traffic Orchestrator for intelligent policy decisions
 
 **Background Threads**:
 1. **Honeypot Monitor**: Monitors honeypot logs every 10 seconds
 2. **Attestation Thread**: Performs device attestation every 5 minutes
 3. **Policy Adapter**: Adapts policies every 1 minute
+4. **Analyst Monitor**: Monitors analyst alerts and triggers policy orchestration every 30 seconds
+
+**Analyst Module Integration**:
+- Connects Analyst module to SDN Policy Engine via `set_analyst_module()`
+- Background thread polls for recent alerts from AnomalyDetector
+- When anomalies detected, calls `handle_analyst_alert()` to trigger dynamic rule installation
+- Uses Traffic Orchestrator for intelligent policy decisions based on threat intelligence
 
 ### Layer 5: Management Layer
 
@@ -463,9 +545,20 @@ if data_transfer > 10 MB in 1 minute:
 ┌──────────────┐ ┌──────────────┐ ┌──────────────┐ ┌──────────────┐
 │   Identity   │ │    Trust     │ │   Heuristic  │ │   Honeypot   │
 │   Manager    │ │  Evaluator   │ │   Analyst    │ │   Manager    │
-└──────────────┘ └──────────────┘ └──────────────┘ └──────────────┘
-         │              │              │              │
-         ↓              ↓              ↓              ↓
+└──────┬───────┘ └──────┬───────┘ └──────┬───────┘ └──────┬───────┘
+       │                │                │                │
+       │                │                │                │
+       │  Policy Defs   │  Trust Scores  │  Threat Alerts │  Threat Intel
+       │                │                │                │
+       ↓                ↓                ↓                ↓
+┌─────────────────────────────────────────────────────────────┐
+│              Traffic Orchestrator                            │
+│  • Intelligent Policy Decisions                              │
+│  • Multi-factor Analysis                                     │
+│  • Dynamic Policy Enforcement                                │
+└─────────────────────────────────────────────────────────────┘
+       │                │                │                │
+       ↓                ↓                ↓                ↓
 ┌─────────────────────────────────────────────────────────────┐
 │                    Flask Controller                          │
 │  • Token Management                                          │
@@ -478,6 +571,11 @@ if data_transfer > 10 MB in 1 minute:
 ┌──────────────┐ ┌──────────────┐ ┌──────────────┐
 │   Ryu SDN    │ │   ML Security │ │   Dashboard  │
 │  Controller  │ │    Engine     │ │              │
+│              │ │                │ │              │
+│  • Policy    │ │  • Attack      │ │  • Real-time │
+│    Engine    │ │    Detection   │ │    Monitoring│
+│  • OpenFlow  │ │  • ML Models   │ │  • Alerts    │
+│    Rules     │ │                │ │  • Topology  │
 └──────────────┘ └──────────────┘ └──────────────┘
 ```
 
@@ -619,6 +717,7 @@ if data_transfer > 10 MB in 1 minute:
 └────┬─────┘      └──────────┘
      │
      │ 1. Detect anomaly
+     │    (via monitor_analyst_alerts thread)
      ↓
 ┌──────────┐
 │  Trust   │
@@ -626,47 +725,103 @@ if data_transfer > 10 MB in 1 minute:
 └────┬─────┘
      │ 2. Reduce trust score
      ↓
+┌──────────────────────────┐
+│   Traffic Orchestrator    │
+│  • Analyzes trust score   │
+│  • Considers threat level │
+│  • Makes policy decision  │
+└────┬──────────────────────┘
+     │ 3. Orchestrate policy
+     ↓
 ┌──────────┐
 │   SDN    │
 │  Policy  │
 │  Engine  │
 └────┬─────┘
-     │ 3. Redirect to honeypot
+     │ 4. handle_analyst_alert()
+     │    → Redirect to honeypot
      ↓
 ┌──────────┐
 │ Honeypot │
 │ (Cowrie) │
 └────┬─────┘
-     │ 4. Capture attack
+     │ 5. Capture attack
      ↓
 ┌──────────┐
 │ Threat   │
 │Intel     │
 └────┬─────┘
-     │ 5. Extract IOCs
+     │ 6. Extract IOCs
      ↓
 ┌──────────┐
 │Mitigation│
 │Generator │
 └────┬─────┘
-     │ 6. Generate blocking rules
+     │ 7. Generate blocking rules
      ↓
 ┌──────────┐
 │   SDN    │
 │  Policy  │
 │  Engine  │
 └────┬─────┘
-     │ 7. Install rules
+     │ 8. Install rules dynamically
      ↓
 ┌──────────┐
 │  Policy  │
 │ Adapter  │
 └────┬─────┘
-     │ 8. Update device policies
+     │ 9. Update device policies
      ↓
 ┌──────────┐
 │ Threat   │
 │ Blocked  │
+└──────────┘
+```
+
+### 4. Policy Translation and Application Flow
+
+```
+┌──────────┐
+│ Identity │
+│  Module  │
+└────┬─────┘
+     │ 1. Generate least-privilege policy
+     │    from behavioral baseline
+     ↓
+┌──────────┐
+│  Policy  │
+│Generator │
+└────┬─────┘
+     │ 2. High-level policy definition
+     │    {
+     │      'device_id': 'ESP32_2',
+     │      'rules': [
+     │        {'type': 'allow', 'match': {'ipv4_dst': '192.168.1.100'}},
+     │        {'type': 'deny', 'match': {}}
+     │      ]
+     │    }
+     ↓
+┌──────────┐
+│   SDN    │
+│  Policy  │
+│  Engine  │
+└────┬─────┘
+     │ 3. apply_policy_from_identity()
+     │    • Get device MAC from Identity module
+     │    • Translate each rule to OpenFlow match fields
+     │    • Install granular OpenFlow rules
+     ↓
+┌──────────┐
+│ OpenFlow │
+│  Switch  │
+└────┬─────┘
+     │ 4. Flow rules installed:
+     │    • Rule 1: eth_src=MAC, ipv4_dst=192.168.1.100 → ALLOW
+     │    • Rule 2: eth_src=MAC → DENY (default)
+     ↓
+┌──────────┐
+│  Policy  │
+│ Enforced │
 └──────────┘
 ```
 
@@ -927,7 +1082,3 @@ Cloud Controller
 - **Dashboard Load**: < 500ms
 
 ---
-
-**Last Updated**: 2024-01-15
-**Version**: 1.0.0
-

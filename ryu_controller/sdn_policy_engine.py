@@ -359,6 +359,101 @@ if RYU_AVAILABLE:
                 self.apply_policy(device_id, 'redirect')
             else:
                 self.apply_policy(device_id, 'allow')
+        
+        def apply_policy_from_identity(self, device_id, policy):
+            """
+            Apply policy from Identity module, translating high-level policy to granular OpenFlow rules
+            
+            Args:
+                device_id: Device identifier
+                policy: Policy dictionary from Identity module with structure:
+                    {
+                        'device_id': str,
+                        'action': str,
+                        'rules': [{'type': str, 'match': dict, 'priority': int}],
+                        'rate_limit': {'packets_per_second': float, 'bytes_per_second': float}
+                    }
+            """
+            if not policy:
+                logger.error(f"Empty policy provided for {device_id}")
+                return
+            
+            # Get device MAC address from identity module
+            if not self.identity_module:
+                logger.error("Identity module not connected")
+                return
+            
+            device_info = self.identity_module.get_device_info(device_id)
+            if not device_info or 'mac_address' not in device_info:
+                logger.error(f"Cannot apply policy: device {device_id} not found in identity module")
+                return
+            
+            mac_address = device_info['mac_address']
+            logger.info(f"Translating policy for {device_id} ({mac_address}) to OpenFlow rules")
+            
+            # Get policy rules
+            policy_rules = policy.get('rules', [])
+            if not policy_rules:
+                logger.warning(f"No rules in policy for {device_id}, applying default allow")
+                self.apply_policy(device_id, 'allow')
+                return
+            
+            # Apply each rule from the policy
+            for rule in policy_rules:
+                rule_type = rule.get('type', 'allow')
+                rule_match = rule.get('match', {})
+                rule_priority = rule.get('priority', 100)
+                
+                # Build match fields starting with device MAC
+                match_fields = {'eth_src': mac_address}
+                
+                # Add policy-specific match fields
+                if 'ipv4_dst' in rule_match:
+                    match_fields['ipv4_dst'] = rule_match['ipv4_dst']
+                if 'ipv4_src' in rule_match:
+                    match_fields['ipv4_src'] = rule_match['ipv4_src']
+                if 'tcp_dst' in rule_match:
+                    match_fields['tcp_dst'] = rule_match['tcp_dst']
+                if 'tcp_src' in rule_match:
+                    match_fields['tcp_src'] = rule_match['tcp_src']
+                if 'udp_dst' in rule_match:
+                    match_fields['udp_dst'] = rule_match['udp_dst']
+                if 'udp_src' in rule_match:
+                    match_fields['udp_src'] = rule_match['udp_src']
+                if 'ip_proto' in rule_match:
+                    match_fields['ip_proto'] = rule_match['ip_proto']
+                
+                # Apply rule to all switches
+                for dpid, rule_generator in self.rule_generators.items():
+                    try:
+                        if rule_type == 'allow':
+                            flow_mod = rule_generator.create_allow_rule(match_fields, rule_priority)
+                            rule_generator.install_rule(flow_mod)
+                            logger.debug(f"Installed ALLOW rule for {device_id} on switch {dpid}: {match_fields}")
+                        elif rule_type == 'deny':
+                            flow_mod = rule_generator.create_deny_rule(match_fields, rule_priority)
+                            rule_generator.install_rule(flow_mod)
+                            logger.debug(f"Installed DENY rule for {device_id} on switch {dpid}: {match_fields}")
+                        else:
+                            logger.warning(f"Unknown rule type in policy: {rule_type}")
+                    except Exception as e:
+                        logger.error(f"Failed to install rule for {device_id} on switch {dpid}: {e}")
+            
+            # Store policy for reference
+            self.device_policies[device_id] = {
+                'action': policy.get('action', 'allow'),
+                'match_fields': {'eth_src': mac_address},
+                'priority': max([r.get('priority', 100) for r in policy_rules], default=100),
+                'policy_source': 'identity_module',
+                'original_policy': policy
+            }
+            
+            # Handle rate limits (if supported by switch)
+            rate_limit = policy.get('rate_limit')
+            if rate_limit:
+                logger.info(f"Rate limits specified for {device_id}: {rate_limit} (not yet implemented in OpenFlow rules)")
+            
+            logger.info(f"Successfully applied policy from Identity module for {device_id}: {len(policy_rules)} rules installed")
 
 else:
     class SDNPolicyEngine:
@@ -424,3 +519,7 @@ else:
         def handle_trust_score_change(self, device_id, new_score):
             """Handle trust score change (stub for testing)"""
             logger.warning(f"Trust score change (stub): {device_id} - {new_score}")
+        
+        def apply_policy_from_identity(self, device_id, policy):
+            """Apply policy from Identity module (stub for testing)"""
+            logger.warning(f"Policy from Identity module (stub): {device_id} - {policy}")

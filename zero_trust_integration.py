@@ -23,6 +23,7 @@ from trust_evaluator.policy_adapter import PolicyAdapter
 from heuristic_analyst.flow_analyzer import FlowAnalyzer
 from heuristic_analyst.anomaly_detector import AnomalyDetector
 from heuristic_analyst.baseline_manager import BaselineManager
+from ryu_controller.traffic_orchestrator import TrafficOrchestrator
 from honeypot_manager.honeypot_deployer import HoneypotDeployer
 from honeypot_manager.threat_intelligence import ThreatIntelligence
 from honeypot_manager.mitigation_generator import MitigationGenerator
@@ -81,6 +82,12 @@ class ZeroTrustFramework:
         # SDN Policy Engine (will be set when Ryu controller starts)
         self.sdn_policy_engine = None
         
+        # Traffic Orchestrator
+        self.traffic_orchestrator = TrafficOrchestrator(
+            identity_module=self.onboarding,
+            trust_module=self.trust_scorer
+        )
+        
         # Background threads
         self.running = False
         self.threads = []
@@ -96,12 +103,23 @@ class ZeroTrustFramework:
         """
         self.sdn_policy_engine = sdn_policy_engine
         
-        # Connect modules
+        # Connect modules to SDN policy engine
         self.sdn_policy_engine.set_identity_module(self.onboarding)
         self.sdn_policy_engine.set_trust_module(self.trust_scorer)
+        self.sdn_policy_engine.set_analyst_module(self.anomaly_detector)
         
+        # Connect SDN policy engine to onboarding for policy application
+        self.onboarding.set_sdn_policy_engine(sdn_policy_engine)
+        
+        # Connect modules to policy adapter and mitigation generator
         self.policy_adapter.set_sdn_policy_engine(sdn_policy_engine)
         self.mitigation_generator.set_sdn_policy_engine(sdn_policy_engine)
+        
+        # Connect traffic orchestrator
+        self.traffic_orchestrator.set_sdn_policy_engine(sdn_policy_engine)
+        self.traffic_orchestrator.set_identity_module(self.onboarding)
+        self.traffic_orchestrator.set_trust_module(self.trust_scorer)
+        self.traffic_orchestrator.set_analyst_module(self.anomaly_detector)
         
         logger.info("SDN policy engine connected")
     
@@ -193,11 +211,80 @@ class ZeroTrustFramework:
                 
                 time.sleep(60)  # Check every minute
         
+        # Thread 4: Analyst monitoring - poll flow stats and detect anomalies
+        def monitor_analyst_alerts():
+            processed_alerts = set()  # Track processed alerts to avoid duplicates
+            
+            while self.running:
+                try:
+                    if not self.sdn_policy_engine:
+                        time.sleep(10)
+                        continue
+                    
+                    # Get all devices
+                    devices = self.onboarding.identity_db.get_all_devices()
+                    
+                    for device in devices:
+                        device_id = device['device_id']
+                        
+                        # Load baseline for device if not already set
+                        baseline = self.baseline_manager.get_baseline(device_id)
+                        if baseline:
+                            self.anomaly_detector.set_baseline(device_id, baseline)
+                        
+                        # Get recent alerts for this device
+                        recent_alerts = self.anomaly_detector.get_recent_alerts(limit=100)
+                        device_alerts = [a for a in recent_alerts if a.get('device_id') == device_id]
+                        
+                        # Process any new alerts (not yet processed)
+                        for alert in device_alerts:
+                            if not alert.get('is_anomaly'):
+                                continue
+                            
+                            # Create unique alert ID
+                            alert_id = f"{device_id}_{alert.get('timestamp', 0)}_{alert.get('anomaly_type', 'unknown')}"
+                            
+                            # Skip if already processed
+                            if alert_id in processed_alerts:
+                                continue
+                            
+                            alert_type = alert.get('anomaly_type', 'anomaly')
+                            severity = alert.get('severity', 'low')
+                            
+                            logger.warning(f"Analyst alert detected: {device_id} - {alert_type} (severity: {severity})")
+                            
+                            # Mark as processed
+                            processed_alerts.add(alert_id)
+                            
+                            # Keep only recent processed alerts (last 1000)
+                            if len(processed_alerts) > 1000:
+                                processed_alerts = set(list(processed_alerts)[-1000:])
+                            
+                            # Handle alert through framework
+                            self.handle_analyst_alert(device_id, alert_type, severity)
+                            
+                            # Use traffic orchestrator for intelligent policy decision
+                            if self.traffic_orchestrator:
+                                threat_intel = {
+                                    'severity': severity,
+                                    'alert_type': alert_type,
+                                    'indicators': alert.get('indicators', [])
+                                }
+                                self.traffic_orchestrator.orchestrate_policy(
+                                    device_id, threat_intelligence=threat_intel
+                                )
+                
+                except Exception as e:
+                    logger.error(f"Error monitoring analyst alerts: {e}")
+                
+                time.sleep(30)  # Check every 30 seconds
+        
         # Start threads
         threads = [
             threading.Thread(target=monitor_honeypot_logs, daemon=True, name="HoneypotMonitor"),
             threading.Thread(target=perform_attestations, daemon=True, name="Attestation"),
-            threading.Thread(target=adapt_policies, daemon=True, name="PolicyAdapter")
+            threading.Thread(target=adapt_policies, daemon=True, name="PolicyAdapter"),
+            threading.Thread(target=monitor_analyst_alerts, daemon=True, name="AnalystMonitor")
         ]
         
         for thread in threads:

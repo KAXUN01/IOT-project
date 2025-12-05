@@ -12,7 +12,15 @@ from collections import deque
 import threading
 import logging
 import os
-from simple_ddos_detector import SimpleDDoSDetector
+# Try to import simple DDoS detector, but make it optional
+try:
+    from simple_ddos_detector import SimpleDDoSDetector
+    SIMPLE_DDOS_DETECTOR_AVAILABLE = True
+except ImportError:
+    SIMPLE_DDOS_DETECTOR_AVAILABLE = False
+    SimpleDDoSDetector = None
+    logger = logging.getLogger(__name__)
+    logger.warning("Simple DDoS detector not available. Install or create simple_ddos_detector module.")
 
 # Try to import TensorFlow, but make it optional
 try:
@@ -51,7 +59,11 @@ class MLSecurityEngine:
         self.blocked_ips = {}  # Dictionary to track blocked IPs and their block duration
         
         # Initialize the simple DDoS detector
-        self.ddos_detector = SimpleDDoSDetector()
+        if SIMPLE_DDOS_DETECTOR_AVAILABLE and SimpleDDoSDetector:
+            self.ddos_detector = SimpleDDoSDetector()
+        else:
+            self.ddos_detector = None
+            self.logger.warning("Simple DDoS detector not available")
         
         # Statistics tracking
         self.detection_window = deque(maxlen=1000)  # Store recent detections for statistics
@@ -384,17 +396,28 @@ class MLSecurityEngine:
         
         try:
             # Use the simple DDoS detector
-            result = self.ddos_detector.detect_attack(packet_data)
+            if self.ddos_detector:
+                result = self.ddos_detector.detect(packet=packet_data)
+            else:
+                # Fallback detection if simple detector not available
+                result = {
+                    'is_attack': False,
+                    'attack_type': None,
+                    'confidence': 0.0,
+                    'reason': 'Simple DDoS detector not available',
+                    'severity': 'low'
+                }
             
             # Store detection in our history
             detection = {
                 'timestamp': datetime.now().isoformat(),
                 'device_id': packet_data.get('device_id', 'unknown'),
-                'is_attack': result['is_attack'],
-                'attack_type': result['attack_type'],
-                'confidence': result['confidence'],
-                'attack_score': result.get('attack_score', 0),
-                'indicators': result.get('indicators', [])
+                'is_attack': result.get('is_attack', False),
+                'attack_type': result.get('attack_type'),
+                'confidence': result.get('confidence', 0.0),
+                'attack_score': result.get('attack_score', result.get('confidence', 0.0) * 100),
+                'indicators': result.get('indicators', [result.get('reason', '')]),
+                'severity': result.get('severity', 'low')
             }
             
             self.attack_detections.append(detection)

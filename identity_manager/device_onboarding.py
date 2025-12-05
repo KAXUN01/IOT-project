@@ -18,18 +18,20 @@ logger = logging.getLogger(__name__)
 class DeviceOnboarding:
     """Manages secure device onboarding process"""
     
-    def __init__(self, certs_dir="certs", db_path="identity.db"):
+    def __init__(self, certs_dir="certs", db_path="identity.db", sdn_policy_engine=None):
         """
         Initialize device onboarding system
         
         Args:
             certs_dir: Directory for certificates
             db_path: Path to identity database
+            sdn_policy_engine: SDN policy engine instance (optional, for policy application)
         """
         self.cert_manager = CertificateManager(certs_dir=certs_dir)
         self.identity_db = IdentityDatabase(db_path=db_path)
         self.profiler = BehavioralProfiler(profiling_duration=300)  # 5 minutes
         self.policy_generator = PolicyGenerator()
+        self.sdn_policy_engine = sdn_policy_engine
         
         logger.info("Device onboarding system initialized")
     
@@ -145,6 +147,14 @@ class DeviceOnboarding:
             policy_json = self.policy_generator.policy_to_json(policy)
             self.identity_db.save_device_policy(device_id, policy_json)
             
+            # Apply policy to SDN controller if available
+            if self.sdn_policy_engine:
+                try:
+                    self.sdn_policy_engine.apply_policy_from_identity(device_id, policy)
+                    logger.info(f"Policy applied to SDN controller for {device_id}")
+                except Exception as e:
+                    logger.error(f"Failed to apply policy to SDN controller for {device_id}: {e}")
+            
             result = {
                 'status': 'success',
                 'device_id': device_id,
@@ -223,10 +233,69 @@ class DeviceOnboarding:
             # Update device status
             self.identity_db.update_device_status(device_id, 'revoked')
             
+            # Remove policy from SDN controller if available
+            if self.sdn_policy_engine:
+                try:
+                    self.sdn_policy_engine.remove_policy(device_id)
+                    logger.info(f"Policy removed from SDN controller for {device_id}")
+                except Exception as e:
+                    logger.error(f"Failed to remove policy from SDN controller for {device_id}: {e}")
+            
             logger.info(f"Device {device_id} revoked")
             return True
             
         except Exception as e:
             logger.error(f"Failed to revoke device {device_id}: {e}")
+            return False
+    
+    def set_sdn_policy_engine(self, sdn_policy_engine):
+        """
+        Set SDN policy engine reference for policy application
+        
+        Args:
+            sdn_policy_engine: SDN policy engine instance
+        """
+        self.sdn_policy_engine = sdn_policy_engine
+        logger.info("SDN policy engine connected to device onboarding")
+    
+    def update_policy_for_device(self, device_id: str) -> bool:
+        """
+        Update policy for a device based on current baseline
+        
+        Args:
+            device_id: Device identifier
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            # Get current baseline
+            baseline_json = self.identity_db.get_behavioral_baseline(device_id)
+            if not baseline_json:
+                logger.warning(f"No baseline found for {device_id}")
+                return False
+            
+            import json
+            baseline = json.loads(baseline_json)
+            
+            # Generate updated policy
+            policy = self.policy_generator.generate_least_privilege_policy(device_id, baseline)
+            policy_json = self.policy_generator.policy_to_json(policy)
+            self.identity_db.save_device_policy(device_id, policy_json)
+            
+            # Apply to SDN controller
+            if self.sdn_policy_engine:
+                try:
+                    self.sdn_policy_engine.apply_policy_from_identity(device_id, policy)
+                    logger.info(f"Policy updated for {device_id}")
+                    return True
+                except Exception as e:
+                    logger.error(f"Failed to update policy in SDN controller for {device_id}: {e}")
+                    return False
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to update policy for {device_id}: {e}")
             return False
 

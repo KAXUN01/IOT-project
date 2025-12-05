@@ -11,6 +11,23 @@
 
 **SecureIoT-SDN** is a comprehensive IoT security framework that combines Software-Defined Networking (SDN) with Zero Trust principles to provide enterprise-grade protection for IoT devices. Built using ESP32 microcontrollers, Flask web framework, and Python, SecureIoT-SDN implements advanced security mechanisms including token-based device authentication, automatic session timeouts, rate limiting, real-time device authorization revocation, and dynamic SDN policy enforcement. The framework features an advanced real-time dashboard with network topology visualization, enabling administrators to monitor, control, and secure IoT devices effectively in distributed environments.
 
+## 🆕 Latest Features
+
+### Policy Translation & Enforcement
+- **Automatic Policy Translation**: High-level policies from Identity module are automatically translated to granular OpenFlow rules for least-privilege enforcement
+- **Dynamic Rule Installation**: OpenFlow rules are dynamically installed based on threat alerts and trust scores
+- **Traffic Orchestration**: Intelligent policy decisions based on device identity, trust scores, and threat intelligence
+
+### Threat Detection & Response
+- **Analyst Module Integration**: Real-time threat alerts from heuristic analyst trigger automatic policy enforcement
+- **Traffic Redirection**: Suspicious traffic is transparently redirected to honeypot for analysis
+- **Mitigation Actions**: Automatic mitigation rules generated from threat intelligence
+
+### Raspberry Pi Deployment
+- **Automated Setup Script**: One-command setup for Raspberry Pi deployment
+- **Systemd Services**: Production-ready service configuration for SDN controller and framework
+- **Complete Integration**: All components configured and ready to run
+
 ---
 
 ## 🏗️ Architecture Diagram
@@ -330,6 +347,46 @@ Found a bug or have a suggestion? Please [open an issue](https://github.com/KAXU
 - **vis.js**: Network visualization library
 - **ESP32 Community**: Hardware and firmware support
 - **Flask Community**: Web framework and extensions
+
+---
+
+## 🚀 Raspberry Pi Deployment
+
+For production deployment on Raspberry Pi, use the automated setup script:
+
+```bash
+cd ~/IOT-project
+sudo bash scripts/raspberry_pi_setup.sh
+```
+
+The script will:
+- Install all dependencies (Python, Docker, Ryu SDN Controller)
+- Configure systemd services for automatic startup
+- Set up firewall rules
+- Create necessary directories
+
+**Services**:
+- `ryu-sdn-controller.service` - SDN controller (port 6653)
+- `zero-trust-sdn.service` - Zero Trust framework
+- `flask-controller.service` - Web dashboard (port 5000)
+
+**Start services**:
+```bash
+sudo systemctl start ryu-sdn-controller
+sudo systemctl start zero-trust-sdn
+sudo systemctl start flask-controller
+```
+
+See `docs/deployment_guide.md` for detailed instructions.
+
+---
+
+## 📚 Documentation
+
+- **Architecture**: `docs/ARCHITECTURE.md` - Complete system architecture
+- **Implementation Features**: `docs/IMPLEMENTATION_FEATURES.md` - New features documentation
+- **Deployment Guide**: `docs/deployment_guide.md` - Raspberry Pi deployment
+- **Real-World Deployment**: `docs/REAL_WORLD_DEPLOYMENT.md` - Hardware setup guide
 
 ---
 

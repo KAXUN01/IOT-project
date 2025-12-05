@@ -76,54 +76,138 @@ mkdir -p certs honeypot_data logs
 chmod 755 certs honeypot_data logs
 ```
 
-### 5. Start Services
+### 5. Automated Setup (Recommended)
 
-#### Option A: Using Systemd Services
+Use the provided setup script for automated installation:
 
-Create service file `/etc/systemd/system/zero-trust-sdn.service`:
+```bash
+cd ~/IOT-project
+sudo bash scripts/raspberry_pi_setup.sh
+```
+
+The script will:
+- Update system packages
+- Install all required dependencies (Python, Docker, Ryu, etc.)
+- Create necessary directories
+- Install and configure systemd services
+- Set up firewall rules
+- Configure permissions
+
+**Note**: The script assumes the project is located at `/home/pi/IOT-project`. If different, specify the path:
+```bash
+sudo bash scripts/raspberry_pi_setup.sh /path/to/IOT-project
+```
+
+### 6. Start Services
+
+#### Option A: Using Systemd Services (After Automated Setup)
+
+After running the setup script, services are ready to start:
+
+```bash
+# Start Ryu SDN Controller
+sudo systemctl start ryu-sdn-controller
+sudo systemctl enable ryu-sdn-controller
+
+# Start Zero Trust Framework
+sudo systemctl start zero-trust-sdn
+sudo systemctl enable zero-trust-sdn
+
+# Start Flask Controller (if separate)
+sudo systemctl start flask-controller
+sudo systemctl enable flask-controller
+```
+
+Check service status:
+```bash
+sudo systemctl status ryu-sdn-controller
+sudo systemctl status zero-trust-sdn
+```
+
+#### Option B: Manual Setup
+
+If you prefer manual setup, create service files:
+
+**Ryu SDN Controller Service** (`/etc/systemd/system/ryu-sdn-controller.service`):
 
 ```ini
 [Unit]
-Description=Zero Trust SDN Framework
-After=network.target docker.service
+Description=Ryu SDN Controller for Zero Trust Framework
+After=network.target
+Wants=network-online.target
 
 [Service]
 Type=simple
 User=pi
+Group=pi
 WorkingDirectory=/home/pi/IOT-project
-Environment="PATH=/home/pi/IOT-project/venv/bin"
-ExecStart=/home/pi/IOT-project/venv/bin/python3 zero_trust_integration.py
+Environment="PATH=/home/pi/IOT-project/venv/bin:/usr/local/bin:/usr/bin:/bin"
+ExecStart=/home/pi/IOT-project/venv/bin/ryu-manager --ofp-tcp-listen-port 6653 /home/pi/IOT-project/ryu_controller/sdn_policy_engine.py
 Restart=always
 RestartSec=10
+StandardOutput=append:/home/pi/IOT-project/logs/ryu.log
+StandardError=append:/home/pi/IOT-project/logs/ryu.log
 
 [Install]
 WantedBy=multi-user.target
 ```
 
-Enable and start service:
+**Zero Trust Framework Service** (`/etc/systemd/system/zero-trust-sdn.service`):
 
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable zero-trust-sdn.service
-sudo systemctl start zero-trust-sdn.service
+```ini
+[Unit]
+Description=Zero Trust SDN Framework
+After=network.target docker.service ryu-sdn-controller.service
+Wants=network-online.target docker.service ryu-sdn-controller.service
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+WorkingDirectory=/home/pi/IOT-project
+Environment="PATH=/home/pi/IOT-project/venv/bin:/usr/local/bin:/usr/bin:/bin"
+ExecStart=/home/pi/IOT-project/venv/bin/python3 /home/pi/IOT-project/zero_trust_integration.py
+Restart=always
+RestartSec=10
+StandardOutput=append:/home/pi/IOT-project/logs/zero_trust.log
+StandardError=append:/home/pi/IOT-project/logs/zero_trust.log
+
+[Install]
+WantedBy=multi-user.target
 ```
 
-#### Option B: Manual Start
+Then enable and start:
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable ryu-sdn-controller
+sudo systemctl enable zero-trust-sdn
+sudo systemctl start ryu-sdn-controller
+sudo systemctl start zero-trust-sdn
+```
 
+#### Option C: Manual Start (Development/Testing)
+
+For development or testing, start services manually:
+
+**Terminal 1 - Ryu SDN Controller**:
+```bash
+cd ~/IOT-project
+source venv/bin/activate
+ryu-manager --ofp-tcp-listen-port 6653 ryu_controller/sdn_policy_engine.py
+```
+
+**Terminal 2 - Zero Trust Framework**:
 ```bash
 cd ~/IOT-project
 source venv/bin/activate
 python3 zero_trust_integration.py
 ```
 
-### 6. Start Ryu Controller
-
-In a separate terminal:
-
+**Terminal 3 - Flask Controller** (if needed):
 ```bash
 cd ~/IOT-project
 source venv/bin/activate
-ryu-manager ryu_controller/sdn_policy_engine.py
+python3 controller.py
 ```
 
 ## Configuration
@@ -131,13 +215,42 @@ ryu-manager ryu_controller/sdn_policy_engine.py
 ### Network Configuration
 
 1. Configure Raspberry Pi as SDN controller:
-   - Set static IP address
-   - Configure firewall rules
+   - Set static IP address (recommended: 192.168.1.100)
+   - Configure firewall rules (ports 5000, 6653, 22)
    - Enable SSH access
 
 2. Connect SDN switch:
    - Connect switch to Raspberry Pi via Ethernet
-   - Configure switch to connect to controller IP
+   - Configure switch to connect to controller IP (default: 6653)
+   - For Mininet testing: `sudo mn --controller=remote,ip=192.168.1.100,port=6653`
+
+### SDN Controller Configuration
+
+The Ryu SDN Controller is configured to:
+- Listen on port 6653 (OpenFlow standard)
+- Run the `SDNPolicyEngine` application
+- Connect to Identity, Trust, and Analyst modules
+- Support dynamic policy enforcement
+
+**Key Features**:
+- **Policy Translation**: Receives high-level policies from Identity module and translates to granular OpenFlow rules
+- **Threat Alert Handling**: Listens for alerts from Analyst module and dynamically installs rules
+- **Traffic Orchestration**: Uses Traffic Orchestrator for intelligent policy decisions based on multiple factors
+
+### Zero Trust Framework Configuration
+
+The framework integrates:
+- **Identity Manager**: Device onboarding and certificate management
+- **Trust Evaluator**: Dynamic trust scoring and policy adaptation
+- **Heuristic Analyst**: Anomaly detection and threat alerts
+- **Honeypot Manager**: Threat intelligence collection
+- **Traffic Orchestrator**: Central policy decision engine
+
+**Background Threads**:
+- Honeypot Monitor: Every 10 seconds
+- Device Attestation: Every 5 minutes
+- Policy Adapter: Every 1 minute
+- Analyst Monitor: Every 30 seconds
 
 ### Performance Optimization
 
@@ -256,10 +369,49 @@ Expected performance on Raspberry Pi 4:
 4. **Regular security updates**
 5. **Monitor system logs**
 
+## New Features
+
+### Policy Translation from Identity Module
+
+The SDN controller now automatically receives and translates high-level policy definitions from the Identity module into granular OpenFlow rules. This ensures least-privilege access enforcement.
+
+**How it works**:
+1. Identity module generates policy from behavioral baseline
+2. Policy sent to SDN Policy Engine via `apply_policy_from_identity()`
+3. Each policy rule translated to OpenFlow match fields
+4. Rules installed on all connected switches
+
+### Threat Alert Integration
+
+The system now listens for threat alerts from the Analyst module and dynamically installs OpenFlow rules to redirect suspicious traffic.
+
+**How it works**:
+1. Analyst module detects anomalies
+2. Background thread (`monitor_analyst_alerts`) polls for alerts
+3. Alerts trigger `handle_analyst_alert()` in SDN Policy Engine
+4. Dynamic rules installed to redirect traffic to honeypot
+
+### Traffic Orchestration
+
+A new Traffic Orchestrator component makes intelligent policy decisions based on multiple real-time variables:
+- Device identity and authentication
+- Current trust scores
+- Active threat intelligence
+- Recent security alerts
+
+**How it works**:
+1. Traffic Orchestrator gathers all relevant factors
+2. Makes intelligent decision (allow/deny/redirect/quarantine)
+3. Applies decision through SDN Policy Engine
+4. Maintains audit trail of decisions
+
+See `docs/IMPLEMENTATION_FEATURES.md` for detailed documentation.
+
 ## Support
 
 For issues or questions:
 - Check logs in `logs/` directory
 - Review documentation in `docs/`
 - Run integration tests: `python3 -m pytest integration_test/`
+- See implementation features: `docs/IMPLEMENTATION_FEATURES.md`
 

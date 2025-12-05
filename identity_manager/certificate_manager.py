@@ -153,11 +153,8 @@ class CertificateManager:
                 x509.NameAttribute(NameOID.COMMON_NAME, device_id),
             ])
             
-            # Add MAC address as Subject Alternative Name
-            san = x509.SubjectAlternativeName([
-                x509.OtherName(x509.ObjectIdentifier("1.3.6.1.4.1.99999.1"), mac_address.encode())
-            ])
-            
+            # Build certificate (without problematic SAN extension for now)
+            # MAC address is already in device_id/common name
             device_cert = x509.CertificateBuilder().subject_name(
                 subject
             ).issuer_name(
@@ -170,9 +167,6 @@ class CertificateManager:
                 datetime.utcnow()
             ).not_valid_after(
                 datetime.utcnow() + timedelta(days=validity_days)
-            ).add_extension(
-                san,
-                critical=False,
             ).sign(ca_key, hashes.SHA256(), default_backend())
             
             # Save device certificate
