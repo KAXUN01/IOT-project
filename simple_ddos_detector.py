@@ -165,12 +165,30 @@ class SimpleDDoSDetector:
             })
             logger.warning(f"DDoS attack detected: {reason}")
         
+        # Calculate attack score (0-100) from confidence
+        attack_score = confidence * 100 if is_attack else 0.0
+        
+        # Build indicators list
+        indicators = []
+        if reason:
+            indicators.append(reason)
+        if is_attack:
+            if attack_type == 'ddos':
+                indicators.append(f"High packet rate: {pps:.2f} pps")
+            elif attack_type == 'volume':
+                byte_rate = rate * size if rate > 0 and size > 0 else 0
+                indicators.append(f"High byte rate: {byte_rate:.2f} Bps")
+            elif attack_type == 'flood':
+                indicators.append(f"Flood pattern: {pps:.2f} pps with small packets")
+        
         return {
             'is_attack': is_attack,
             'attack_type': attack_type,
             'confidence': confidence,
+            'attack_score': attack_score,
             'reason': reason,
             'severity': severity,
+            'indicators': indicators,
             'packet_info': {
                 'size': size,
                 'protocol': protocol,

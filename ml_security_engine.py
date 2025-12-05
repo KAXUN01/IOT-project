@@ -43,9 +43,13 @@ INIT_TIMEOUT = 30  # seconds
 ml_engine = None
 
 class MLSecurityEngine:
-    def __init__(self, model_path="models/ddos_model_retrained.keras"):
+    def __init__(self, model_path="data/models/ddos_model_retrained"):
         """
         Initialize ML Security Engine with DDoS detection system
+        
+        Args:
+            model_path: Path to model directory (containing config.json and model.weights.h5)
+                       or path to .keras file for backward compatibility
         """
         self.model = None
         self.model_path = model_path
@@ -57,6 +61,9 @@ class MLSecurityEngine:
         self.is_running = True
         self.attack_detections = deque(maxlen=1000)  # Store last 1000 detections
         self.blocked_ips = {}  # Dictionary to track blocked IPs and their block duration
+        
+        # Initialize logging first (before using self.logger)
+        self.logger = logging.getLogger(__name__)
         
         # Initialize the simple DDoS detector
         if SIMPLE_DDOS_DETECTOR_AVAILABLE and SimpleDDoSDetector:
@@ -90,10 +97,6 @@ class MLSecurityEngine:
             2: 'Botnet Attack',
             3: 'Flood Attack'
         }
-        
-        # Initialize logging
-        logging.basicConfig(level=logging.INFO)
-        self.logger = logging.getLogger(__name__)
         
         # Load the model
         if not self.load_model():
@@ -221,14 +224,139 @@ class MLSecurityEngine:
     
     def load_model(self):
         """
-        Initialize the DDoS Detection System
+        Load the DDoS Detection Model from file
+        Supports both directory format (config.json + model.weights.h5) and .keras format
         Returns True if successful, False otherwise
         """
         try:
-            self.logger = logging.getLogger('MLSecurityEngine')
-            self.logger.setLevel(logging.INFO)
+            # Ensure logger is set (don't reset it)
+            if not hasattr(self, 'logger') or self.logger is None:
+                self.logger = logging.getLogger(__name__)
             
-            self.logger.info("🤖 Initializing DDoS Detection System...")
+            self.logger.info("🤖 Loading DDoS Detection Model...")
+            
+            # Check if TensorFlow is available
+            if not TENSORFLOW_AVAILABLE:
+                self.logger.warning("TensorFlow not available, using simple detector only")
+                self.is_loaded = True  # Mark as loaded but without ML model
+                self.network_stats['model_status'] = 'simple_detector_only'
+                return True
+            
+            import os
+            model_path = self.model_path
+            
+            # Check if path is a directory (new format) or file (old format)
+            if os.path.isdir(model_path):
+                # New format: directory with config.json and model.weights.h5
+                config_path = os.path.join(model_path, 'config.json')
+                weights_path = os.path.join(model_path, 'model.weights.h5')
+                
+                if not os.path.exists(config_path):
+                    raise FileNotFoundError(f"Model config not found: {config_path}")
+                if not os.path.exists(weights_path):
+                    raise FileNotFoundError(f"Model weights not found: {weights_path}")
+                
+                # Load model from config and weights
+                with open(config_path, 'r') as f:
+                    model_config = json.load(f)
+                
+                # Reconstruct model from config
+                if 'module' in model_config and model_config['module'] == 'keras':
+                    try:
+                        # Method 1: Try building model manually from config (most reliable)
+                        from keras.models import Sequential
+                        from keras.layers import Dense, Dropout
+                        from keras.optimizers import Adam
+                        
+                        # Build model from config
+                        model_config_obj = model_config.get('config', {})
+                        layers_config = model_config_obj.get('layers', [])
+                        
+                        self.model = Sequential()
+                        for layer_config in layers_config:
+                            layer_class = layer_config.get('class_name', '')
+                            layer_cfg = layer_config.get('config', {})
+                            
+                            if layer_class == 'InputLayer':
+                                # Input layer is handled automatically by Sequential
+                                continue
+                            elif layer_class == 'Dense':
+                                units = layer_cfg.get('units')
+                                activation = layer_cfg.get('activation', 'linear')
+                                self.model.add(Dense(units, activation=activation))
+                            elif layer_class == 'Dropout':
+                                rate = layer_cfg.get('rate', 0.0)
+                                self.model.add(Dropout(rate))
+                        
+                        # Load weights
+                        self.model.load_weights(weights_path)
+                        
+                        # Compile model
+                        compile_config = model_config.get('compile_config', {})
+                        if compile_config:
+                            optimizer_config = compile_config.get('optimizer', {})
+                            loss = compile_config.get('loss', 'binary_crossentropy')
+                            metrics = compile_config.get('metrics', ['accuracy'])
+                            
+                            # Reconstruct optimizer
+                            opt_config = optimizer_config.get('config', {})
+                            lr = opt_config.get('learning_rate', 0.001)
+                            optimizer = Adam(learning_rate=lr)
+                            
+                            self.model.compile(optimizer=optimizer, loss=loss, metrics=metrics)
+                        else:
+                            # Default compilation
+                            self.model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+                        
+                        self.logger.info(f"✅ Model loaded from directory: {model_path}")
+                    except Exception as e1:
+                        # Fallback: Try using model_from_json
+                        self.logger.warning(f"Manual model building failed: {e1}, trying model_from_json...")
+                        try:
+                            from keras.models import model_from_json
+                            # Convert full config to JSON string
+                            config_json_str = json.dumps(model_config)
+                            self.model = model_from_json(config_json_str)
+                            self.model.load_weights(weights_path)
+                            
+                            # Compile if needed
+                            compile_config = model_config.get('compile_config', {})
+                            if compile_config:
+                                from keras.optimizers import Adam
+                                opt_config = compile_config.get('optimizer', {}).get('config', {})
+                                lr = opt_config.get('learning_rate', 0.001)
+                                self.model.compile(
+                                    optimizer=Adam(learning_rate=lr),
+                                    loss=compile_config.get('loss', 'binary_crossentropy'),
+                                    metrics=compile_config.get('metrics', ['accuracy'])
+                                )
+                            
+                            self.logger.info(f"✅ Model loaded using model_from_json: {model_path}")
+                        except Exception as e2:
+                            raise Exception(f"Both loading methods failed. Manual: {e1}, JSON: {e2}")
+                else:
+                    raise ValueError(f"Unsupported model config format: {model_config.get('module')}")
+                    
+            elif os.path.isfile(model_path) and model_path.endswith('.keras'):
+                # Old format: single .keras file
+                self.model = keras.models.load_model(model_path)
+                self.logger.info(f"✅ Model loaded from file: {model_path}")
+            else:
+                # Try to find model in default location
+                default_path = "data/models/ddos_model_retrained"
+                if os.path.isdir(default_path):
+                    self.model_path = default_path
+                    return self.load_model()  # Retry with default path
+                else:
+                    raise FileNotFoundError(f"Model not found: {model_path}")
+            
+            # Verify model is loaded
+            if self.model is None:
+                raise ValueError("Model loaded but is None")
+            
+            # Test model with dummy input
+            test_input = np.random.rand(1, 77)
+            _ = self.model.predict(test_input, verbose=0)
             
             # Initialize attack types
             self.attack_types = {
@@ -243,13 +371,21 @@ class MLSecurityEngine:
             self.is_loaded = True
             self.network_stats['model_status'] = 'healthy'
             
-            self.logger.info("✅ DDoS Detection System initialized successfully")
+            self.logger.info("✅ DDoS Detection Model loaded successfully")
             return True
             
         except Exception as e:
-            self.logger.error(f"❌ Failed to initialize DDoS Detection System: {e}")
+            self.logger.error(f"❌ Failed to load DDoS Detection Model: {e}")
+            import traceback
+            self.logger.debug(traceback.format_exc())
             self.is_loaded = False
             self.network_stats['model_status'] = 'error'
+            # Fallback to simple detector
+            if self.ddos_detector:
+                self.logger.info("Falling back to simple DDoS detector")
+                self.is_loaded = True
+                self.network_stats['model_status'] = 'simple_detector_only'
+                return True
             return False
     
     def extract_features(self, packet_data):
@@ -389,24 +525,119 @@ class MLSecurityEngine:
     
     def predict_attack(self, packet_data):
         """
-        Predict if the packet represents a DDoS attack using the simple detector
+        Predict if the packet represents a DDoS attack using ML model and/or simple detector
         """
         if not self.is_loaded:
             return {'prediction': 'Model not loaded', 'confidence': 0.0, 'attack_type': 'Unknown'}
         
         try:
-            # Use the simple DDoS detector
+            ml_prediction = None
+            ml_confidence = 0.0
+            is_attack = False
+            
+            # Try ML model prediction first if available
+            if self.model is not None and TENSORFLOW_AVAILABLE:
+                try:
+                    # Extract features
+                    feature_vector, features = self.extract_features(packet_data)
+                    if feature_vector is not None:
+                        # Get ML prediction
+                        start_time = time.time()
+                        ml_prediction_raw = self.model.predict(feature_vector, verbose=0)
+                        prediction_time = time.time() - start_time
+                        
+                        # Model outputs probability (0-1) for binary classification
+                        ml_confidence = float(ml_prediction_raw[0][0])
+                        is_attack = ml_confidence > 0.5  # Threshold for attack detection
+                        
+                        # Update processing time
+                        self.last_processing_times.append(prediction_time)
+                        self.update_detection_stats(prediction_time)
+                        
+                        # Determine attack type based on confidence and packet characteristics
+                        if is_attack:
+                            if ml_confidence > 0.9:
+                                attack_type = 'DDoS Attack'
+                            elif ml_confidence > 0.7:
+                                attack_type = 'Volume Attack'
+                            else:
+                                attack_type = 'Rate Attack'
+                        else:
+                            attack_type = 'Normal'
+                        
+                        ml_prediction = {
+                            'is_attack': is_attack,
+                            'attack_type': attack_type,
+                            'confidence': ml_confidence,
+                            'method': 'ml_model'
+                        }
+                except Exception as e:
+                    self.logger.warning(f"ML model prediction failed: {e}, falling back to simple detector")
+                    ml_prediction = None
+            
+            # Use simple DDoS detector as primary or fallback
             if self.ddos_detector:
-                result = self.ddos_detector.detect(packet=packet_data)
+                simple_result = self.ddos_detector.detect(packet=packet_data)
+                
+                # Combine ML and simple detector results if both available
+                if ml_prediction:
+                    # Weighted combination: 70% ML, 30% simple detector
+                    ml_weight = 0.7
+                    simple_weight = 0.3
+                    
+                    combined_confidence = (ml_weight * ml_confidence + 
+                                         simple_weight * simple_result.get('confidence', 0.0))
+                    combined_is_attack = is_attack or simple_result.get('is_attack', False)
+                    
+                    # Use ML attack type if ML detected attack, otherwise use simple detector
+                    if is_attack:
+                        final_attack_type = ml_prediction['attack_type']
+                    elif simple_result.get('is_attack'):
+                        final_attack_type = simple_result.get('attack_type', 'DDoS Attack')
+                    else:
+                        final_attack_type = 'Normal'
+                    
+                    result = {
+                        'is_attack': combined_is_attack,
+                        'attack_type': final_attack_type,
+                        'confidence': combined_confidence,
+                        'reason': f"ML: {ml_confidence:.2f}, Simple: {simple_result.get('confidence', 0.0):.2f}",
+                        'severity': 'high' if combined_confidence > 0.8 else ('medium' if combined_confidence > 0.5 else 'low'),
+                        'ml_confidence': ml_confidence,
+                        'simple_confidence': simple_result.get('confidence', 0.0)
+                    }
+                else:
+                    # Use only simple detector
+                    result = simple_result
             else:
-                # Fallback detection if simple detector not available
-                result = {
-                    'is_attack': False,
-                    'attack_type': None,
-                    'confidence': 0.0,
-                    'reason': 'Simple DDoS detector not available',
-                    'severity': 'low'
-                }
+                # Use only ML model or fallback
+                if ml_prediction:
+                    result = {
+                        'is_attack': is_attack,
+                        'attack_type': ml_prediction['attack_type'],
+                        'confidence': ml_confidence,
+                        'reason': f"ML model prediction: {ml_confidence:.2f}",
+                        'severity': 'high' if ml_confidence > 0.8 else ('medium' if ml_confidence > 0.5 else 'low')
+                    }
+                else:
+                    # No detectors available
+                    result = {
+                        'is_attack': False,
+                        'attack_type': None,
+                        'confidence': 0.0,
+                        'reason': 'No detection methods available',
+                        'severity': 'low'
+                    }
+            
+            # Calculate attack score (0-100)
+            attack_score = result.get('confidence', 0.0) * 100
+            
+            # Build indicators list
+            indicators = []
+            if result.get('reason'):
+                indicators.append(result['reason'])
+            if ml_prediction and ml_prediction.get('method') == 'ml_model':
+                indicators.append(f"ML Model: {ml_confidence:.2%} confidence")
             
             # Store detection in our history
             detection = {
@@ -415,28 +646,30 @@ class MLSecurityEngine:
                 'is_attack': result.get('is_attack', False),
                 'attack_type': result.get('attack_type'),
                 'confidence': result.get('confidence', 0.0),
-                'attack_score': result.get('attack_score', result.get('confidence', 0.0) * 100),
-                'indicators': result.get('indicators', [result.get('reason', '')]),
+                'attack_score': attack_score,
+                'indicators': indicators,
                 'severity': result.get('severity', 'low')
             }
             
             self.attack_detections.append(detection)
             
             # Update statistics
-            self.update_statistics(result['is_attack'])
+            self.update_statistics(result.get('is_attack', False))
             
             return {
-                'prediction': result['attack_type'],
-                'confidence': result['confidence'],
-                'attack_type': result['attack_type'],
-                'is_attack': result['is_attack'],
-                'attack_score': result.get('attack_score', 0),
-                'indicators': result.get('indicators', []),
+                'prediction': result.get('attack_type', 'Unknown'),
+                'confidence': result.get('confidence', 0.0),
+                'attack_type': result.get('attack_type'),
+                'is_attack': result.get('is_attack', False),
+                'attack_score': attack_score,
+                'indicators': indicators,
                 'detection': detection
             }
             
         except Exception as e:
             self.logger.error(f"❌ Attack prediction failed: {e}")
+            import traceback
+            self.logger.debug(traceback.format_exc())
             return {'prediction': 'Error', 'confidence': 0.0, 'attack_type': 'Unknown'}
     
     def update_statistics(self, is_attack):

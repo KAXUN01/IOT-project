@@ -295,10 +295,10 @@ class ZeroTrustFramework:
                                 mapped_id = None
                                 try:
                                     # Check if device_id is a MAC address
-                                    if ':' in device_id and len(device_id) == 17:
+                                    if self.onboarding and ':' in device_id and len(device_id) == 17:
                                         mapped_id = self.onboarding.get_device_id_from_mac(device_id)
-                                except:
-                                    pass
+                                except Exception as e:
+                                    logger.debug(f"Failed to map MAC {device_id} to device_id: {e}")
                                 
                                 if mapped_id:
                                     device_id = mapped_id

@@ -537,7 +537,7 @@ def data():
             })
     except Exception as e:
         # Non-fatal for data ingestion; continue normally
-        pass
+        app.logger.warning(f"ML prediction error (non-fatal): {str(e)}")
 
     return json.dumps({'status': 'accepted'})
 
@@ -1117,10 +1117,19 @@ def ml_detections():
                 clean_det['details'] = str(d.get('details'))
             clean_detections.append(clean_det)
 
+        # Get statistics safely
+        stats = {}
+        if hasattr(ml_engine, 'get_attack_statistics'):
+            try:
+                stats = ml_engine.get_attack_statistics()
+            except Exception as e:
+                app.logger.warning(f"Error getting attack statistics: {e}")
+                stats = {}
+        
         return json.dumps({
             'status': 'success',
             'detections': clean_detections,
-            'stats': ml_engine.get_attack_statistics()
+            'stats': stats
         }), 200
     except Exception as e:
         app.logger.error(f"Error in /ml/detections: {str(e)}")
@@ -1159,8 +1168,12 @@ def ml_statistics():
     global ml_engine
     if ml_engine and hasattr(ml_engine, 'is_loaded') and ml_engine.is_loaded:
         if hasattr(ml_engine, 'get_attack_statistics'):
-            stats = ml_engine.get_attack_statistics()
-            return json.dumps(stats)
+            try:
+                stats = ml_engine.get_attack_statistics()
+                return json.dumps(stats)
+            except Exception as e:
+                app.logger.error(f"Error getting ML statistics: {e}")
+                return json.dumps({'error': f'Failed to get statistics: {str(e)}'})
         else:
             return json.dumps({'error': 'ML engine statistics not available'})
     else:
