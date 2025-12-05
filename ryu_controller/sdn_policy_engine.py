@@ -13,7 +13,7 @@ try:
     from ryu.controller import ofp_event
     from ryu.controller.handler import CONFIG_DISPATCHER, MAIN_DISPATCHER, set_ev_cls
     from ryu.ofproto import ofproto_v1_3
-    from ryu.lib.packet import packet, ethernet, ipv4, arp
+    from ryu.lib.packet import packet, ethernet, ipv4, arp, tcp, udp
     RYU_AVAILABLE = True
 except ImportError:
     RYU_AVAILABLE = False
@@ -81,6 +81,11 @@ if RYU_AVAILABLE:
             self.trust_module = trust_module
             logger.info("Trust module connected")
         
+        def set_onboarding_module(self, onboarding_module):
+            """Set reference to device onboarding module for traffic recording"""
+            self.onboarding_module = onboarding_module
+            logger.info("Onboarding module connected for traffic recording")
+        
         @set_ev_cls(ofp_event.EventOFPSwitchFeatures, CONFIG_DISPATCHER)
         def switch_features_handler(self, ev):
             """
@@ -141,6 +146,40 @@ if RYU_AVAILABLE:
             
             # Get device policy
             device_id = self._get_device_id_from_mac(eth_src)
+            
+            # Record traffic for behavioral profiling if device is being profiled
+            if device_id and self.onboarding_module:
+                try:
+                    # Extract packet information for profiling
+                    packet_info = {
+                        'size': len(msg.data),
+                        'src_mac': eth_src,
+                        'dst_mac': eth_dst,
+                        'in_port': in_port
+                    }
+                    
+                    # Try to extract IP and port information if available
+                    ip_pkt = pkt.get_protocol(ipv4.ipv4)
+                    if ip_pkt:
+                        packet_info['dst_ip'] = ip_pkt.dst
+                        packet_info['src_ip'] = ip_pkt.src
+                        packet_info['protocol'] = ip_pkt.proto
+                        
+                        # Try to get TCP/UDP port information
+                        tcp_pkt = pkt.get_protocol(tcp.tcp)
+                        udp_pkt = pkt.get_protocol(udp.udp)
+                        if tcp_pkt:
+                            packet_info['dst_port'] = tcp_pkt.dst_port
+                            packet_info['src_port'] = tcp_pkt.src_port
+                        elif udp_pkt:
+                            packet_info['dst_port'] = udp_pkt.dst_port
+                            packet_info['src_port'] = udp_pkt.src_port
+                    
+                    # Record traffic for profiling
+                    self.onboarding_module.record_traffic(device_id, packet_info)
+                except Exception as e:
+                    logger.debug(f"Failed to record traffic for profiling: {e}")
+            
             policy = self._get_device_policy(device_id, eth_src)
             
             # Apply policy
@@ -474,6 +513,7 @@ else:
             self.identity_module = None
             self.analyst_module = None
             self.trust_module = None
+            self.onboarding_module = None  # For traffic recording during profiling
             
             # Honeypot port (default)
             self.honeypot_port = 3
@@ -495,6 +535,11 @@ else:
             """Set reference to trust evaluation module"""
             self.trust_module = trust_module
             logger.info("Trust module connected")
+        
+        def set_onboarding_module(self, onboarding_module):
+            """Set reference to device onboarding module for traffic recording"""
+            self.onboarding_module = onboarding_module
+            logger.info("Onboarding module connected for traffic recording")
         
         def apply_policy(self, device_id, action, match_fields=None, priority=100):
             """Apply a policy to a device (stub for testing)"""

@@ -107,6 +107,7 @@ class ZeroTrustFramework:
         self.sdn_policy_engine.set_identity_module(self.onboarding)
         self.sdn_policy_engine.set_trust_module(self.trust_scorer)
         self.sdn_policy_engine.set_analyst_module(self.anomaly_detector)
+        self.sdn_policy_engine.set_onboarding_module(self.onboarding)  # For traffic recording during profiling
         
         # Connect SDN policy engine to onboarding for policy application
         self.onboarding.set_sdn_policy_engine(sdn_policy_engine)

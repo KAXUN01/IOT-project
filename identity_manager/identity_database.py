@@ -40,7 +40,10 @@ class IdentityDatabase:
                     last_seen TIMESTAMP,
                     status TEXT DEFAULT 'active',
                     device_type TEXT,
-                    device_info TEXT
+                    device_info TEXT,
+                    physical_identity TEXT,
+                    first_seen TIMESTAMP,
+                    device_fingerprint TEXT
                 )
             ''')
             
@@ -66,6 +69,9 @@ class IdentityDatabase:
                 )
             ''')
             
+            # Migrate existing databases to add new columns if they don't exist
+            self._migrate_database(conn)
+            
             conn.commit()
             conn.close()
             
@@ -75,8 +81,37 @@ class IdentityDatabase:
             logger.error(f"Failed to initialize database: {e}")
             raise
     
+    def _migrate_database(self, conn):
+        """Migrate existing database schema to add new columns"""
+        cursor = conn.cursor()
+        
+        try:
+            # Check if physical_identity column exists
+            cursor.execute("PRAGMA table_info(devices)")
+            columns = [column[1] for column in cursor.fetchall()]
+            
+            # Add physical_identity column if it doesn't exist
+            if 'physical_identity' not in columns:
+                cursor.execute('ALTER TABLE devices ADD COLUMN physical_identity TEXT')
+                logger.info("Added physical_identity column to devices table")
+            
+            # Add first_seen column if it doesn't exist
+            if 'first_seen' not in columns:
+                cursor.execute('ALTER TABLE devices ADD COLUMN first_seen TIMESTAMP')
+                logger.info("Added first_seen column to devices table")
+            
+            # Add device_fingerprint column if it doesn't exist
+            if 'device_fingerprint' not in columns:
+                cursor.execute('ALTER TABLE devices ADD COLUMN device_fingerprint TEXT')
+                logger.info("Added device_fingerprint column to devices table")
+            
+        except Exception as e:
+            logger.warning(f"Database migration warning: {e}")
+            # Don't raise - migration is optional
+    
     def add_device(self, device_id: str, mac_address: str, certificate_path: str = None,
-                   key_path: str = None, device_type: str = None, device_info: str = None) -> bool:
+                   key_path: str = None, device_type: str = None, device_info: str = None,
+                   physical_identity: str = None, device_fingerprint: str = None) -> bool:
         """
         Add a new device to the database
         
@@ -87,6 +122,8 @@ class IdentityDatabase:
             key_path: Path to device private key
             device_type: Type of device
             device_info: Additional device information (JSON string)
+            physical_identity: Physical identity metadata (JSON string)
+            device_fingerprint: Device fingerprint hash
             
         Returns:
             True if successful, False otherwise
@@ -95,16 +132,37 @@ class IdentityDatabase:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
             
+            # Check if device exists to preserve first_seen timestamp
+            existing = self.get_device(device_id)
+            first_seen = datetime.utcnow()
+            if existing:
+                # Try to preserve existing first_seen if available
+                existing_first_seen = existing.get('first_seen')
+                if existing_first_seen:
+                    # Handle both string and datetime objects
+                    if isinstance(existing_first_seen, str):
+                        try:
+                            from datetime import datetime as dt
+                            # Try to parse ISO format
+                            first_seen = dt.fromisoformat(existing_first_seen.replace('Z', '+00:00'))
+                        except:
+                            # If parsing fails, use current time
+                            first_seen = datetime.utcnow()
+                    else:
+                        first_seen = existing_first_seen
+            
             cursor.execute('''
                 INSERT OR REPLACE INTO devices 
-                (device_id, mac_address, certificate_path, key_path, device_type, device_info, last_seen)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            ''', (device_id, mac_address, certificate_path, key_path, device_type, device_info, datetime.utcnow()))
+                (device_id, mac_address, certificate_path, key_path, device_type, device_info, 
+                 last_seen, physical_identity, device_fingerprint, first_seen)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (device_id, mac_address, certificate_path, key_path, device_type, device_info, 
+                  datetime.utcnow(), physical_identity, device_fingerprint, first_seen))
             
             conn.commit()
             conn.close()
             
-            logger.info(f"Device added: {device_id} ({mac_address})")
+            logger.info(f"Device added: {device_id} ({mac_address}) with physical identity linked")
             return True
             
         except Exception as e:

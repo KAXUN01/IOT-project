@@ -8,7 +8,7 @@ import logging
 import time
 from collections import defaultdict, deque
 from datetime import datetime, timedelta
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -144,6 +144,69 @@ class BehavioralProfiler:
             Baseline profile dictionary or None
         """
         return self.device_profiles.get(device_id)
+    
+    def is_profiling_expired(self, device_id: str) -> bool:
+        """
+        Check if profiling period has expired for a device
+        
+        Args:
+            device_id: Device identifier
+            
+        Returns:
+            True if profiling period has expired, False otherwise
+        """
+        if device_id not in self.active_profiling:
+            return False
+        
+        profile = self.active_profiling[device_id]
+        elapsed_time = time.time() - profile['start_time']
+        return elapsed_time >= self.profiling_duration
+    
+    def get_active_profiling_devices(self) -> List[str]:
+        """
+        Get list of device IDs currently being profiled
+        
+        Returns:
+            List of device IDs in active profiling
+        """
+        return list(self.active_profiling.keys())
+    
+    def get_profiling_elapsed_time(self, device_id: str) -> float:
+        """
+        Get elapsed time for a device's profiling
+        
+        Args:
+            device_id: Device identifier
+            
+        Returns:
+            Elapsed time in seconds, or 0 if not profiling
+        """
+        if device_id not in self.active_profiling:
+            return 0.0
+        
+        profile = self.active_profiling[device_id]
+        return time.time() - profile['start_time']
+    
+    def get_profiling_status(self, device_id: str) -> Optional[Dict]:
+        """
+        Get current profiling status for a device
+        
+        Args:
+            device_id: Device identifier
+            
+        Returns:
+            Dictionary with profiling status (packet_count, byte_count, elapsed_time) or None
+        """
+        if device_id not in self.active_profiling:
+            return None
+        
+        profile = self.active_profiling[device_id]
+        return {
+            'packet_count': profile.get('packet_count', 0),
+            'byte_count': profile.get('byte_count', 0),
+            'elapsed_time': time.time() - profile['start_time'],
+            'start_time': profile['start_time']
+        }
     
     def check_anomaly(self, device_id: str, current_metrics: Dict) -> Dict:
         """

@@ -247,12 +247,127 @@ def onboard_device():
             if device_id not in packet_counts:
                 packet_counts[device_id] = []
             
+            app.logger.info(f"Device {device_id} onboarded. Profiling will auto-finalize after 5 minutes.")
             return json.dumps(result), 200
         else:
             return json.dumps(result), 400
             
     except Exception as e:
         app.logger.error(f"Onboarding error: {str(e)}")
+        return json.dumps({
+            'status': 'error',
+            'message': str(e)
+        }), 500
+
+@app.route('/finalize_onboarding', methods=['POST'])
+def finalize_onboarding():
+    """
+    Manually finalize onboarding for a device (establish baseline and generate policy)
+    
+    Request JSON:
+    {
+        "device_id": "ESP32_2"
+    }
+    
+    Returns:
+        Finalization result with baseline and policy
+    """
+    if not ONBOARDING_AVAILABLE or not onboarding:
+        return json.dumps({
+            'status': 'error',
+            'message': 'Device onboarding system not available'
+        }), 503
+    
+    try:
+        data = request.json
+        device_id = data.get('device_id')
+        
+        if not device_id:
+            return json.dumps({
+                'status': 'error',
+                'message': 'Missing device_id'
+            }), 400
+        
+        # Finalize onboarding
+        result = onboarding.finalize_onboarding(device_id)
+        
+        if result['status'] == 'success':
+            app.logger.info(f"Onboarding finalized for {device_id}. Baseline and policy generated.")
+            return json.dumps(result), 200
+        else:
+            return json.dumps(result), 400
+            
+    except Exception as e:
+        app.logger.error(f"Finalization error: {str(e)}")
+        return json.dumps({
+            'status': 'error',
+            'message': str(e)
+        }), 500
+
+@app.route('/get_profiling_status', methods=['GET'])
+def get_profiling_status():
+    """
+    Get profiling status for a device
+    
+    Query parameters:
+        device_id: Device identifier
+    
+    Returns:
+        Profiling status information
+    """
+    if not ONBOARDING_AVAILABLE or not onboarding:
+        return json.dumps({
+            'status': 'error',
+            'message': 'Device onboarding system not available'
+        }), 503
+    
+    try:
+        device_id = request.args.get('device_id')
+        
+        if not device_id:
+            return json.dumps({
+                'status': 'error',
+                'message': 'Missing device_id parameter'
+            }), 400
+        
+        # Get profiling status
+        profiler = onboarding.profiler
+        profile_status = profiler.get_profiling_status(device_id)
+        
+        if profile_status:
+            elapsed = profile_status.get('elapsed_time', 0)
+            remaining = max(0, profiler.profiling_duration - elapsed)
+            return json.dumps({
+                'status': 'success',
+                'device_id': device_id,
+                'is_profiling': True,
+                'elapsed_time': elapsed,
+                'remaining_time': remaining,
+                'packet_count': profile_status.get('packet_count', 0),
+                'byte_count': profile_status.get('byte_count', 0)
+            }), 200
+        else:
+            # Check if device has baseline (profiling completed)
+            baseline = profiler.get_baseline(device_id)
+            if baseline:
+                return json.dumps({
+                    'status': 'success',
+                    'device_id': device_id,
+                    'is_profiling': False,
+                    'baseline_established': True,
+                    'baseline': baseline
+                }), 200
+            else:
+                return json.dumps({
+                    'status': 'success',
+                    'device_id': device_id,
+                    'is_profiling': False,
+                    'baseline_established': False,
+                    'message': 'Device not currently being profiled'
+                }), 200
+            
+    except Exception as e:
+        app.logger.error(f"Error getting profiling status: {str(e)}")
         return json.dumps({
             'status': 'error',
             'message': str(e)
