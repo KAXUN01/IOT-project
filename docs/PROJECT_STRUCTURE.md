@@ -24,7 +24,6 @@ IOT-project/
 │   ├── PROJECT_DOCUMENTATION.md
 │   ├── REAL_WORLD_DEPLOYMENT.md
 │   ├── START_GUIDE.md
-│   ├── DDoS_SIMULATOR_GUIDE.md
 │   ├── deployment_guide.md
 │   └── *.pdf                 # Reference documents
 │
@@ -36,7 +35,6 @@ IOT-project/
 ├── tests/                    # Test files
 │   ├── test_ml_model.py
 │   ├── test_sdn_devices.py
-│   ├── ddos_attack_simulator.py
 │   └── simple_ddos_detector.py
 │
 ├── integration_test/         # Integration tests

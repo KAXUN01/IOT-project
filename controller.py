@@ -192,9 +192,11 @@ def simulate_policy_enforcement(device_id):
     return True
 
 def update_sdn_metrics():
-    sdn_metrics["control_plane_latency"] = random.randint(5, 50)
-    sdn_metrics["data_plane_throughput"] = random.randint(100, 1000)
-    sdn_metrics["policy_enforcement_rate"] = random.randint(80, 100)
+    """Update SDN metrics with real data from Ryu controller if available"""
+    # TODO: Integrate with Ryu controller to get real SDN metrics
+    # For now, keep metrics at 0 if no real data is available
+    # Real metrics would come from Ryu controller API or flow statistics
+    pass
 
 @app.route('/onboard', methods=['POST'])
 def onboard_device():
@@ -927,21 +929,28 @@ def get_device_history():
 
 @app.route('/get_health_metrics')
 def get_health_metrics():
+    """Get real device health metrics based on actual device status"""
     current_time = time.time()
     health_data = {}
     for device in device_data:
-        online = (current_time - last_seen.get(device, 0)) < 10
-        if online:
+        last_seen_time = last_seen.get(device, 0)
+        online = (current_time - last_seen_time) < 10  # Device is online if seen in last 10 seconds
+        
+        if online and last_seen_time > 0:
+            # Calculate real uptime from last_seen timestamp
+            uptime_seconds = int(current_time - last_seen_time)
             health_data[device] = {
-                "cpu_usage": random.randint(20, 80),
-                "memory_usage": random.randint(30, 90),
-                "uptime": int(current_time - last_seen.get(device, current_time))
+                "online": True,
+                "uptime": uptime_seconds,
+                "last_seen": last_seen_time,
+                "status": "online"
             }
         else:
             health_data[device] = {
-                "cpu_usage": 0,
-                "memory_usage": 0,
-                "uptime": 0
+                "online": False,
+                "uptime": 0,
+                "last_seen": last_seen_time if last_seen_time > 0 else None,
+                "status": "offline"
             }
     return json.dumps(health_data)
 
@@ -1013,7 +1022,9 @@ def get_policies():
 
 @app.route('/get_sdn_metrics')
 def get_sdn_metrics():
-    update_sdn_metrics()
+    """Get SDN metrics - returns real data if available, otherwise 0"""
+    # Real SDN metrics would be populated from Ryu controller
+    # For now, return current metrics (0 if not set from real sources)
     return json.dumps(sdn_metrics)
 
 # ML Security Engine Endpoints
@@ -1113,7 +1124,12 @@ def ml_detections():
             return json.dumps({'error': 'ML model not loaded', 'status': 'error'}), 503
 
         if hasattr(ml_engine, 'attack_detections'):
-            detections = list(ml_engine.attack_detections)[-20:]  # Get last 20 detections
+            all_detections = list(ml_engine.attack_detections)[-20:]  # Get last 20 detections
+            # Filter to only high-confidence attacks (>70% confidence)
+            detections = [
+                d for d in all_detections 
+                if d.get('is_attack', False) and d.get('confidence', 0.0) > 0.7
+            ]
         else:
             detections = []
 
@@ -1173,6 +1189,83 @@ def analyze_packet():
             return json.dumps({'error': 'ML engine does not support packet analysis'})
     except Exception as e:
         return json.dumps({'error': f'Analysis failed: {str(e)}'})
+
+@app.route('/api/network/statistics')
+def network_statistics():
+    """Get comprehensive real network statistics"""
+    try:
+        current_time = time.time()
+        stats = {}
+        
+        # Get ML engine statistics if available
+        global ml_engine
+        if ml_engine and hasattr(ml_engine, 'get_attack_statistics'):
+            try:
+                ml_stats = ml_engine.get_attack_statistics()
+                stats['ml_engine'] = {
+                    'total_packets': ml_stats.get('total_packets', 0),
+                    'attack_packets': ml_stats.get('attack_packets', 0),
+                    'normal_packets': ml_stats.get('normal_packets', 0),
+                    'attack_rate': ml_stats.get('attack_rate', 0.0),
+                    'detection_accuracy': ml_stats.get('detection_accuracy', 0.0),
+                    'processing_rate': ml_stats.get('processing_rate', 0.0),
+                    'model_confidence': ml_stats.get('model_confidence', 0.0)
+                }
+            except Exception as e:
+                app.logger.warning(f"Error getting ML statistics: {e}")
+                stats['ml_engine'] = {}
+        else:
+            stats['ml_engine'] = {}
+        
+        # Get device-specific statistics
+        device_stats = {}
+        for device_id in device_data:
+            # Real packet count from device_data
+            packet_count = sum(device_data.get(device_id, []))
+            
+            # Calculate real traffic rate (packets per minute)
+            device_packet_timestamps = packet_counts.get(device_id, [])
+            recent_packets = [t for t in device_packet_timestamps if current_time - t <= 60]
+            packets_per_minute = len(recent_packets)
+            
+            # Device online/offline status
+            last_seen_time = last_seen.get(device_id, 0)
+            is_online = (current_time - last_seen_time) < 10
+            
+            device_stats[device_id] = {
+                'total_packets': packet_count,
+                'packets_per_minute': packets_per_minute,
+                'is_online': is_online,
+                'last_seen': last_seen_time if last_seen_time > 0 else None,
+                'uptime_seconds': int(current_time - last_seen_time) if is_online and last_seen_time > 0 else 0
+            }
+        
+        stats['devices'] = device_stats
+        
+        # Overall network statistics
+        total_devices = len(device_data)
+        online_devices = sum(1 for d in device_data if (current_time - last_seen.get(d, 0)) < 10)
+        total_network_packets = sum(sum(device_data.get(d, [])) for d in device_data)
+        
+        stats['network'] = {
+            'total_devices': total_devices,
+            'online_devices': online_devices,
+            'offline_devices': total_devices - online_devices,
+            'total_network_packets': total_network_packets
+        }
+        
+        return json.dumps({
+            'status': 'success',
+            'statistics': stats
+        }), 200
+        
+    except Exception as e:
+        app.logger.error(f"Error in /api/network/statistics: {str(e)}")
+        return json.dumps({
+            'error': 'Internal server error',
+            'status': 'error',
+            'message': str(e)
+        }), 500
 
 @app.route('/ml/statistics')
 def ml_statistics():
@@ -1406,6 +1499,75 @@ def update_alert_activity():
             'message': str(e)
         }), 500
 
+@app.route('/api/honeypot/status', methods=['GET'])
+def get_honeypot_status():
+    """
+    Get honeypot container status and information
+    
+    Returns:
+        JSON with honeypot status, threats, blocked IPs, and mitigation rules
+    """
+    try:
+        # Try to import and check honeypot status
+        try:
+            from honeypot_manager.honeypot_deployer import HoneypotDeployer
+            from honeypot_manager.docker_manager import DOCKER_AVAILABLE
+            
+            if not DOCKER_AVAILABLE:
+                return json.dumps({
+                    'status': 'stopped',
+                    'message': 'Docker not available',
+                    'threats': [],
+                    'blocked_ips': [],
+                    'mitigation_rules': []
+                }), 200
+            
+            deployer = HoneypotDeployer()
+            container_status = deployer.get_status()
+            is_running = deployer.is_running()
+            
+            # Get threats from threat intelligence if available
+            threats = []
+            blocked_ips = []
+            mitigation_rules = []
+            
+            try:
+                from honeypot_manager.threat_intelligence import ThreatIntelligence
+                # Try to get threat intelligence instance
+                # This would need to be initialized elsewhere or passed in
+                # For now, return empty lists
+            except Exception:
+                pass
+            
+            return json.dumps({
+                'status': 'running' if is_running else 'stopped',
+                'container_status': container_status or 'not_found',
+                'running': is_running,
+                'threats': threats,
+                'blocked_ips': blocked_ips,
+                'mitigation_rules': mitigation_rules
+            }), 200
+            
+        except ImportError:
+            # Honeypot manager not available
+            return json.dumps({
+                'status': 'stopped',
+                'message': 'Honeypot manager not available',
+                'threats': [],
+                'blocked_ips': [],
+                'mitigation_rules': []
+            }), 200
+            
+    except Exception as e:
+        app.logger.error(f"Error getting honeypot status: {e}")
+        return json.dumps({
+            'status': 'error',
+            'message': str(e),
+            'threats': [],
+            'blocked_ips': [],
+            'mitigation_rules': []
+        }), 500
+
 @app.route('/api/honeypot/redirected_devices', methods=['GET'])
 def get_redirected_devices():
     """
@@ -1427,9 +1589,23 @@ def get_redirected_devices():
                     'activity_count': alert.get('honeypot_activity_count', 0)
                 })
         
+        # Check honeypot container status
+        container_running = False
+        try:
+            from honeypot_manager.honeypot_deployer import HoneypotDeployer
+            from honeypot_manager.docker_manager import DOCKER_AVAILABLE
+            if DOCKER_AVAILABLE:
+                deployer = HoneypotDeployer()
+                container_running = deployer.is_running()
+        except Exception:
+            pass
+        
         return json.dumps({
             'status': 'success',
-            'devices': redirected_devices
+            'devices': redirected_devices,
+            'redirected_count': len(redirected_devices),
+            'container_running': container_running,
+            'total_threats': len([a for a in suspicious_device_alerts if a.get('honeypot_activity_count', 0) > 0])
         }), 200
     except Exception as e:
         app.logger.error(f"Error getting redirected devices: {e}")

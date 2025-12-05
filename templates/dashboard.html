@@ -7,25 +7,31 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <style>
         :root {
-            --primary-bg: #0a1929;
-            --secondary-bg: #132f4c;
-            --accent-color: #3399ff;
-            --accent-hover: #1a7fff;
-            --text-primary: #ffffff;
-            --text-secondary: #b2bac2;
-            --success-color: #2e7d32;
-            --success-hover: #266e2b;
-            --warning-color: #ed6c02;
-            --warning-hover: #d46001;
-            --danger-color: #d32f2f;
-            --danger-hover: #bc2929;
-            --card-bg: rgba(19, 47, 76, 0.4);
-            --border-color: rgba(255, 255, 255, 0.12);
-            --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.1);
-            --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
-            --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
-            --transition-fast: 0.15s ease;
-            --transition-normal: 0.3s ease;
+            --primary-bg: #0f172a;
+            --secondary-bg: #1e293b;
+            --accent-color: #3b82f6;
+            --accent-hover: #2563eb;
+            --text-primary: #f8fafc;
+            --text-secondary: #cbd5e1;
+            --success-color: #10b981;
+            --success-hover: #059669;
+            --warning-color: #f59e0b;
+            --warning-hover: #d97706;
+            --danger-color: #ef4444;
+            --danger-hover: #dc2626;
+            --card-bg: rgba(30, 41, 59, 0.6);
+            --border-color: rgba(148, 163, 184, 0.2);
+            --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+            --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+            --spacing-xs: 0.25rem;
+            --spacing-sm: 0.5rem;
+            --spacing-md: 1rem;
+            --spacing-lg: 1.5rem;
+            --spacing-xl: 2rem;
+            --radius-sm: 6px;
+            --radius-md: 8px;
+            --radius-lg: 12px;
         }
 
         * {
@@ -49,18 +55,21 @@
         }
 
         .dashboard-header {
-            background: var(--secondary-bg);
-            padding: 1rem;
+            background: linear-gradient(135deg, var(--secondary-bg) 0%, rgba(30, 41, 59, 0.95) 100%);
+            padding: var(--spacing-lg);
             position: sticky;
             top: 0;
             z-index: 1000;
             backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--border-color);
         }
 
         .dashboard-header h1 {
-            font-size: 1.5rem;
-            font-weight: 600;
-            margin-bottom: 1rem;
+            font-size: 1.75rem;
+            font-weight: 700;
+            margin-bottom: var(--spacing-md);
+            color: var(--text-primary);
+            letter-spacing: -0.5px;
         }
 
         .tab-navigation {
@@ -83,43 +92,27 @@
             color: var(--text-secondary);
             cursor: pointer;
             white-space: nowrap;
-            transition: all var(--transition-normal);
-            border-radius: 8px;
+            border-radius: var(--radius-md);
             font-family: 'Inter', sans-serif;
             position: relative;
             font-weight: 500;
             letter-spacing: 0.3px;
+            font-size: 0.9375rem;
         }
 
-        .tab-button::after {
-            content: '';
-            position: absolute;
-            bottom: -2px;
-            left: 0;
-            width: 100%;
-            height: 2px;
-            background: var(--accent-color);
-            transform: scaleX(0);
-            transition: transform var(--transition-normal);
-        }
-
-        .tab-button:hover::after {
-            transform: scaleX(0.5);
+        .tab-button:hover {
+            color: var(--text-primary);
+            background: rgba(59, 130, 246, 0.1);
         }
 
         .tab-button.active {
-            background: rgba(51, 153, 255, 0.1);
+            background: rgba(59, 130, 246, 0.15);
             color: var(--accent-color);
             border-color: var(--accent-color);
         }
 
-        .tab-button.active::after {
-            transform: scaleX(1);
-        }
-
         .tab-content {
             display: none;
-            animation: fadeIn 0.3s ease;
         }
 
         .tab-content.active {
@@ -136,23 +129,25 @@
         .card {
             background: var(--card-bg);
             border: 1px solid var(--border-color);
-            border-radius: 12px;
-            padding: 1.5rem;
+            border-radius: var(--radius-lg);
+            padding: var(--spacing-lg);
             backdrop-filter: blur(10px);
-            transition: all var(--transition-normal);
             box-shadow: var(--shadow-sm);
         }
 
         .card:hover {
-            transform: translateY(-2px);
-            box-shadow: var(--shadow-md);
             border-color: var(--accent-color);
+            box-shadow: var(--shadow-md);
         }
 
         .card h3 {
-            font-size: 1.1rem;
-            margin-bottom: 1rem;
+            font-size: 1.125rem;
+            font-weight: 600;
+            margin-bottom: var(--spacing-md);
             color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-sm);
         }
 
         .metric-value {
@@ -180,8 +175,8 @@
 
         .progress-bar div {
             height: 100%;
-            background: var(--accent-color);
-            transition: width 0.3s ease;
+            background: linear-gradient(90deg, var(--accent-color), var(--accent-hover));
+            border-radius: 3px;
         }
 
         .network-topology {
@@ -256,13 +251,10 @@
         .button {
             padding: 0.75rem 1.5rem;
             border: none;
-            border-radius: 8px;
+            border-radius: var(--radius-md);
             cursor: pointer;
             font-weight: 500;
-            transition: all var(--transition-normal);
             font-family: 'Inter', sans-serif;
-            position: relative;
-            overflow: hidden;
             display: inline-flex;
             align-items: center;
             justify-content: center;
@@ -273,22 +265,6 @@
             font-size: 0.875rem;
         }
 
-        .button::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(to right, transparent, rgba(255, 255, 255, 0.1), transparent);
-            transform: translateX(-100%);
-            transition: transform 0.6s ease;
-        }
-
-        .button:hover::before {
-            transform: translateX(100%);
-        }
-
         .button-primary {
             background: var(--accent-color);
             color: var(--text-primary);
@@ -296,7 +272,6 @@
 
         .button-primary:hover {
             background: var(--accent-hover);
-            transform: translateY(-2px);
             box-shadow: var(--shadow-md);
         }
 
@@ -307,13 +282,7 @@
 
         .button-danger:hover {
             background: var(--danger-hover);
-            transform: translateY(-2px);
             box-shadow: var(--shadow-md);
-        }
-
-        .button:active {
-            transform: translateY(0);
-            box-shadow: var(--shadow-sm);
         }
 
         .button:disabled {
@@ -568,20 +537,13 @@
         }
 
         .status-dot-large.active {
-            background: #4caf50;
-            box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.3);
-            animation: pulse 2s infinite;
+            background: var(--success-color);
+            box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.3);
         }
 
         .status-dot-large.error {
-            background: #f44336;
-            box-shadow: 0 0 0 3px rgba(244, 67, 54, 0.3);
-        }
-
-        @keyframes pulse {
-            0% { box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.3); }
-            50% { box-shadow: 0 0 0 8px rgba(76, 175, 80, 0.1); }
-            100% { box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.3); }
+            background: var(--danger-color);
+            box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.3);
         }
 
         .status-info {
@@ -626,7 +588,6 @@
 
         .stat-item:hover {
             border-color: var(--accent-color);
-            transform: translateY(-2px);
         }
 
         .stat-icon {
@@ -702,7 +663,7 @@
             color: var(--text-secondary);
             font-size: 0.875rem;
             cursor: pointer;
-            transition: all var(--transition-normal);
+            font-weight: 500;
         }
 
         .filter-btn:hover {
@@ -759,8 +720,8 @@
         }
 
         .detection-item:hover {
-            transform: translateX(4px);
             box-shadow: var(--shadow-md);
+            border-left-width: 6px;
         }
 
         .detection-item.attack {
@@ -825,8 +786,8 @@
 
         .confidence-fill {
             height: 100%;
-            background: var(--accent-color);
-            transition: width 0.3s ease;
+            background: linear-gradient(90deg, var(--accent-color), var(--accent-hover));
+            border-radius: 2px;
         }
 
         .detection-device {
@@ -835,18 +796,7 @@
         }
 
         .loading-spinner {
-            width: 20px;
-            height: 20px;
-            border: 2px solid var(--border-color);
-            border-top: 2px solid var(--accent-color);
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin-right: 0.5rem;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+            display: none;
         }
 
         .loading-indicator {
@@ -899,10 +849,6 @@
             border-radius: 3px;
         }
 
-        @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
-        }
 
         @media (max-width: 768px) {
             .container {
@@ -1082,50 +1028,137 @@
         <section id="overview" class="tab-content active">
             <div class="grid-container">
                 <div class="card">
-                    <h3>Network Status</h3>
+                    <h3>🌐 Network Status</h3>
                     <div class="metric-value" id="total-devices">0</div>
-                    <div class="metric-label">Active Devices</div>
-                </div>
-                <div class="card">
-                    <h3>Network Traffic</h3>
-                    <div class="metric-value" id="total-packets">0</div>
-                    <div class="metric-label">Packets/Minute</div>
-                </div>
-                <div class="card">
-                    <h3>System Health</h3>
-                    <div class="progress-bar">
-                        <div id="system-health" style="width: 85%"></div>
+                    <div class="metric-label">Total Devices</div>
+                    <div style="margin-top: 0.5rem; font-size: 0.875rem; color: var(--text-secondary);">
+                        <span id="online-devices">0</span> online | <span id="offline-devices">0</span> offline
                     </div>
-                    <div class="metric-label">System Performance</div>
+                </div>
+                <div class="card">
+                    <h3>📊 Network Traffic</h3>
+                    <div class="metric-value" id="overview-total-packets">0</div>
+                    <div class="metric-label">Total Packets Processed</div>
+                    <div style="margin-top: 0.5rem; font-size: 0.875rem; color: var(--text-secondary);">
+                        <span id="overview-packets-per-min">0</span> packets/min
+                    </div>
+                </div>
+                <div class="card">
+                    <h3>⚠️ Attack Rate</h3>
+                    <div class="metric-value" id="overview-attack-rate">0%</div>
+                    <div class="metric-label">Threat Detection Rate</div>
+                    <div style="margin-top: 0.5rem; font-size: 0.875rem; color: var(--text-secondary);">
+                        <span id="overview-attack-packets">0</span> attack packets detected
+                    </div>
+                </div>
+                <div class="card">
+                    <h3>💚 System Health</h3>
+                    <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 0.5rem;">
+                        <div class="progress-bar" style="flex: 1;">
+                            <div id="system-health" style="width: 0%"></div>
+                        </div>
+                        <div style="font-size: 1.5rem; font-weight: 600; color: var(--accent-color); min-width: 60px; text-align: right;" id="health-percentage">0%</div>
+                    </div>
+                    <div class="metric-label">Device Availability</div>
                 </div>
             </div>
-            <div class="network-topology" id="network-visualization"></div>
+            <div class="grid-container" style="margin-top: 1rem;">
+                <div class="card">
+                    <h3>🤖 ML Engine Status</h3>
+                    <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem;">
+                        <span class="status-dot-large" id="overview-ml-status-dot"></span>
+                        <span id="overview-ml-status-text" style="font-weight: 500;">Initializing...</span>
+                    </div>
+                    <div class="metric-label">Model Status: <span id="overview-model-status">Loading...</span></div>
+                    <div class="metric-label" style="margin-top: 0.5rem;">Detection Accuracy: <span id="overview-detection-accuracy">--</span></div>
+                </div>
+                <div class="card">
+                    <h3>🔒 Security Alerts</h3>
+                    <div class="metric-value" id="overview-alerts-count">0</div>
+                    <div class="metric-label">Active Alerts</div>
+                    <div style="margin-top: 0.5rem; font-size: 0.875rem;">
+                        <span style="color: var(--danger-color);" id="overview-high-alerts">0</span> high | 
+                        <span style="color: var(--warning-color);" id="overview-medium-alerts">0</span> medium
+                    </div>
+                </div>
+                <div class="card">
+                    <h3>🍯 Honeypot Status</h3>
+                    <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem;">
+                        <span class="status-dot" id="overview-honeypot-status-dot"></span>
+                        <span id="overview-honeypot-status" style="font-weight: 500;">Stopped</span>
+                    </div>
+                    <div class="metric-label">Threats Captured: <span id="overview-threats-captured">0</span></div>
+                    <div class="metric-label" style="margin-top: 0.5rem;">Redirected Devices: <span id="overview-redirected-devices">0</span></div>
+                </div>
+            </div>
+            <div class="card" style="margin-top: 1rem;">
+                <h3>🗺️ Network Topology</h3>
+                <div class="network-topology" id="network-visualization"></div>
+            </div>
         </section>
 
         <!-- Devices Tab -->
         <section id="devices" class="tab-content">
+            <div class="grid-container">
+                <div class="card">
+                    <h3>📱 Device Statistics</h3>
+                    <div class="stats-grid">
+                        <div class="stat-item">
+                            <div class="stat-icon">🌐</div>
+                            <div class="stat-content">
+                                <div class="stat-value" id="devices-total-count">0</div>
+                                <div class="stat-label">Total Devices</div>
+                            </div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-icon">✅</div>
+                            <div class="stat-content">
+                                <div class="stat-value" id="devices-online-count">0</div>
+                                <div class="stat-label">Online</div>
+                            </div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-icon">📦</div>
+                            <div class="stat-content">
+                                <div class="stat-value" id="devices-total-packets">0</div>
+                                <div class="stat-label">Total Packets</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
             <div class="card">
-                <h3>Connected Devices</h3>
+                <h3>🔌 Connected Devices</h3>
                 <div class="scroll-container">
                     <table class="device-table">
                         <thead>
                             <tr>
                                 <th>Device ID</th>
                                 <th>Status</th>
+                                <th>Authorization</th>
                                 <th>Packets</th>
-                                <th>Rate Limit</th>
+                                <th>Packets/Min</th>
+                                <th>Last Seen</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody id="device-list">
                             {% for device, authorized in devices.items() %}
                             <tr>
-                                <td>{{ device }}</td>
-                                <td><span class="status-badge {{ 'authorized' if authorized else 'unauthorized' }}">
-                                    {{ 'Authorized' if authorized else 'Unauthorized' }}
-                                </span></td>
+                                <td><strong>{{ device }}</strong></td>
+                                <td>
+                                    <span class="status-badge" id="status-{{ device }}">
+                                        Checking...
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="status-badge {{ 'authorized' if authorized else 'unauthorized' }}">
+                                        {{ 'Authorized' if authorized else 'Unauthorized' }}
+                                    </span>
+                                </td>
                                 <td id="packets-{{ device }}">{{ data[device] }}</td>
-                                <td id="rate-limit-{{ device }}">0/60</td>
+                                <td id="packets-per-min-{{ device }}">0</td>
+                                <td id="last-seen-{{ device }}">--</td>
                                 <td>
                                     <form method="POST" action="/update" style="display: inline;">
                                         <input type="hidden" name="device_id" value="{{ device }}">
@@ -1147,7 +1180,7 @@
         <section id="security" class="tab-content">
             <div class="grid-container">
                 <div class="card">
-                    <h3>Security Policies</h3>
+                    <h3>🛡️ Security Policies</h3>
                     <div class="policy-toggle">
                         <div class="policy-info">
                             <span class="policy-name">Packet Inspection</span>
@@ -1180,7 +1213,7 @@
                     </div>
                 </div>
                 <div class="card">
-                    <h3>Recent Alerts</h3>
+                    <h3>🚨 Security Alerts</h3>
                     <div id="security-alerts" class="scroll-container">
                         <div class="alert-filters">
                             <button class="filter-btn active" data-severity="all">All</button>
@@ -1193,7 +1226,7 @@
                 </div>
             </div>
             <div class="card">
-                <h3>Policy Logs</h3>
+                <h3>📋 Policy Logs</h3>
                 <div class="policy-logs-header">
                     <div class="search-box">
                         <input type="text" id="log-search" placeholder="Search logs...">
@@ -1307,7 +1340,6 @@
                 </div>
                 <div id="ml-detections" class="detections-container">
                     <div class="loading-indicator">
-                        <div class="loading-spinner"></div>
                         <span>Loading detection data...</span>
                     </div>
                 </div>
@@ -1318,23 +1350,23 @@
         <section id="trust" class="tab-content">
             <div class="grid-container">
                 <div class="card">
-                    <h3>Average Trust Score</h3>
+                    <h3>⭐ Average Trust Score</h3>
                     <div class="metric-value" id="avg-trust-score">0</div>
                     <div class="metric-label">Network Trust Level</div>
                 </div>
                 <div class="card">
-                    <h3>Trusted Devices</h3>
+                    <h3>✅ Trusted Devices</h3>
                     <div class="metric-value" id="trusted-devices-count">0</div>
                     <div class="metric-label">Score ≥ 70</div>
                 </div>
                 <div class="card">
-                    <h3>Suspicious Devices</h3>
+                    <h3>⚠️ Suspicious Devices</h3>
                     <div class="metric-value" id="suspicious-devices-count">0</div>
                     <div class="metric-label">Score < 50</div>
                 </div>
             </div>
             <div class="card">
-                <h3>Device Trust Scores</h3>
+                <h3>📊 Device Trust Scores</h3>
                 <div class="scroll-container">
                     <table class="device-table">
                         <thead>
@@ -1356,29 +1388,29 @@
         <section id="honeypot" class="tab-content">
             <div class="grid-container">
                 <div class="card">
-                    <h3>Honeypot Status</h3>
+                    <h3>🍯 Honeypot Status</h3>
                     <div class="metric-value" id="honeypot-status">Stopped</div>
                     <div class="metric-label" id="honeypot-status-label">Container Status</div>
                 </div>
                 <div class="card">
-                    <h3>Threats Captured</h3>
+                    <h3>🎯 Threats Captured</h3>
                     <div class="metric-value" id="threats-captured">0</div>
                     <div class="metric-label">Total Threats</div>
                 </div>
                 <div class="card">
-                    <h3>Blocked IPs</h3>
+                    <h3>🚫 Blocked IPs</h3>
                     <div class="metric-value" id="blocked-ips-count">0</div>
                     <div class="metric-label">Auto-Blocked</div>
                 </div>
             </div>
             <div class="card">
-                <h3>Recent Threats</h3>
+                <h3>🔍 Recent Threats</h3>
                 <div class="scroll-container">
                     <div id="recent-threats-list" class="alerts-list"></div>
                 </div>
             </div>
             <div class="card">
-                <h3>Mitigation Rules</h3>
+                <h3>🛡️ Mitigation Rules</h3>
                 <div class="scroll-container">
                     <table class="device-table">
                         <thead>
@@ -1399,19 +1431,37 @@
         <section id="certificates" class="tab-content">
             <div class="grid-container">
                 <div class="card">
-                    <h3>Total Certificates</h3>
-                    <div class="metric-value" id="total-certificates">0</div>
-                    <div class="metric-label">Issued Certificates</div>
-                </div>
-                <div class="card">
-                    <h3>Valid Certificates</h3>
-                    <div class="metric-value" id="valid-certificates">0</div>
-                    <div class="metric-label">Currently Valid</div>
-                </div>
-                <div class="card">
-                    <h3>Expired Certificates</h3>
-                    <div class="metric-value" id="expired-certificates">0</div>
-                    <div class="metric-label">Require Renewal</div>
+                    <h3>🔐 Certificate Overview</h3>
+                    <div class="stats-grid">
+                        <div class="stat-item">
+                            <div class="stat-icon">📜</div>
+                            <div class="stat-content">
+                                <div class="stat-value" id="certificates-total">0</div>
+                                <div class="stat-label">Total Certificates</div>
+                            </div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-icon">✅</div>
+                            <div class="stat-content">
+                                <div class="stat-value" id="certificates-valid">0</div>
+                                <div class="stat-label">Valid</div>
+                            </div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-icon">⚠️</div>
+                            <div class="stat-content">
+                                <div class="stat-value" id="certificates-expiring">0</div>
+                                <div class="stat-label">Expiring Soon</div>
+                            </div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-icon">❌</div>
+                            <div class="stat-content">
+                                <div class="stat-value" id="certificates-expired">0</div>
+                                <div class="stat-label">Expired</div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
             <div class="card">
@@ -1437,24 +1487,84 @@
         <section id="analytics" class="tab-content">
             <div class="grid-container">
                 <div class="card">
-                    <h3>Network Performance</h3>
-                    <div id="network-analytics" class="metric-value"></div>
+                    <h3>📈 Network Performance</h3>
+                    <div class="stats-grid">
+                        <div class="stat-item">
+                            <div class="stat-icon">📦</div>
+                            <div class="stat-content">
+                                <div class="stat-value" id="analytics-total-packets">0</div>
+                                <div class="stat-label">Total Packets</div>
+                            </div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-icon">⚡</div>
+                            <div class="stat-content">
+                                <div class="stat-value" id="analytics-packets-per-min">0</div>
+                                <div class="stat-label">Packets/Min</div>
+                            </div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-icon">🌐</div>
+                            <div class="stat-content">
+                                <div class="stat-value" id="analytics-online-devices">0</div>
+                                <div class="stat-label">Online Devices</div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 <div class="card">
-                    <h3>System Metrics</h3>
-                    <div id="system-metrics" class="metric-value"></div>
+                    <h3>⚙️ System Metrics</h3>
+                    <div class="metrics-container">
+                        <div class="metric-row">
+                            <span class="metric-label">System Health:</span>
+                            <span class="metric-value" id="analytics-system-health">0%</span>
+                        </div>
+                        <div class="metric-row">
+                            <span class="metric-label">ML Engine Status:</span>
+                            <span class="metric-value" id="analytics-ml-status">Unknown</span>
+                        </div>
+                        <div class="metric-row">
+                            <span class="metric-label">Honeypot Status:</span>
+                            <span class="metric-value" id="analytics-honeypot-status">Stopped</span>
+                        </div>
+                        <div class="metric-row">
+                            <span class="metric-label">Active Alerts:</span>
+                            <span class="metric-value" id="analytics-active-alerts">0</span>
+                        </div>
+                    </div>
                 </div>
             </div>
             <div class="card">
-                <h3>Traffic Analysis</h3>
-                <div id="traffic-analysis" class="scroll-container"></div>
+                <h3>📊 Traffic Analysis</h3>
+                <div class="scroll-container">
+                    <div id="traffic-analysis">
+                        <div class="loading-indicator">Loading traffic analysis...</div>
+                    </div>
+                </div>
             </div>
         </section>
 
         <!-- Device Approval Tab -->
         <section id="approval" class="tab-content">
-            <div class="card">
-                <h3>Pending Device Approvals</h3>
+            <div class="grid-container">
+                <div class="card">
+                    <h3>⏳ Pending Approvals</h3>
+                    <div class="metric-value" id="pending-count">0</div>
+                    <div class="metric-label">Devices Awaiting Review</div>
+                </div>
+                <div class="card">
+                    <h3>✅ Approved Today</h3>
+                    <div class="metric-value" id="approved-today">0</div>
+                    <div class="metric-label">Devices Approved</div>
+                </div>
+                <div class="card">
+                    <h3>❌ Rejected Today</h3>
+                    <div class="metric-value" id="rejected-today">0</div>
+                    <div class="metric-label">Devices Rejected</div>
+                </div>
+            </div>
+            <div class="card" style="margin-top: 1rem;">
+                <h3>📋 Pending Device Approvals</h3>
                 <p style="color: var(--text-secondary); margin-bottom: 1rem;">
                     New devices detected on the WiFi network are listed below. Review and approve or reject each device.
                 </p>
@@ -1463,7 +1573,7 @@
                 </div>
             </div>
             <div class="card" style="margin-top: 1rem;">
-                <h3>Device Approval History</h3>
+                <h3>📜 Device Approval History</h3>
                 <div id="device-history-container" class="scroll-container">
                     <div class="loading-indicator">Loading history...</div>
                 </div>
@@ -1486,6 +1596,26 @@
                 const target = document.getElementById(targetId);
                 if (target) {
                     target.classList.add('active');
+                    
+                    // Call appropriate update functions based on active tab
+                    if (targetId === 'overview') {
+                        updateOverviewStatistics();
+                    } else if (targetId === 'security') {
+                        updatePolicyLogs();
+                        updateSecurityAlerts();
+                    } else if (targetId === 'ml-engine') {
+                        updateMLMetrics();
+                        updateMLDetections();
+                        updateNetworkStatistics();
+                    } else if (targetId === 'trust') {
+                        updateTrustScores();
+                    } else if (targetId === 'honeypot') {
+                        updateHoneypotStatus();
+                    } else if (targetId === 'certificates') {
+                        updateCertificates();
+                    } else if (targetId === 'analytics') {
+                        updateAnalytics();
+                    }
                 }
             }
 
@@ -1605,6 +1735,14 @@
             fetch('/get_health_metrics')
                 .then(response => response.json())
                 .then(data => updateHealthMetrics(data));
+            
+            // Update network statistics
+            updateNetworkStatistics();
+            
+            // Update overview statistics if overview tab is active
+            if (document.getElementById('overview').classList.contains('active')) {
+                updateOverviewStatistics();
+            }
 
             // Update security section if active
             if (document.getElementById('security').classList.contains('active')) {
@@ -1615,6 +1753,7 @@
             if (document.getElementById('ml-engine').classList.contains('active')) {
                 updateMLMetrics();
                 updateMLDetections();
+                updateNetworkStatistics();
             }
             
             // Auto-refresh suspicious device alerts every 5 seconds (separate from main update)
@@ -1647,9 +1786,125 @@
         }
 
         function updateDeviceMetrics(data) {
-            document.getElementById('total-devices').textContent = Object.keys(data).length;
-            const totalPackets = Object.values(data).reduce((sum, device) => sum + device.packets, 0);
-            document.getElementById('total-packets').textContent = totalPackets;
+            const deviceCount = Object.keys(data).length;
+            const totalPackets = Object.values(data).reduce((sum, device) => sum + (device.packets || 0), 0);
+            
+            // Update overview tab
+            const totalDevicesEl = document.getElementById('total-devices');
+            if (totalDevicesEl) totalDevicesEl.textContent = deviceCount;
+            
+            const overviewTotalPacketsEl = document.getElementById('overview-total-packets');
+            if (overviewTotalPacketsEl) overviewTotalPacketsEl.textContent = totalPackets;
+        }
+        
+        function updateOverviewStatistics() {
+            // Update network statistics in overview
+            fetch('/api/network/statistics')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success' && data.statistics) {
+                        const stats = data.statistics;
+                        const network = stats.network || {};
+                        const mlEngine = stats.ml_engine || {};
+                        
+                        // Update device counts
+                        const onlineDevicesEl = document.getElementById('online-devices');
+                        const offlineDevicesEl = document.getElementById('offline-devices');
+                        if (onlineDevicesEl) onlineDevicesEl.textContent = network.online_devices || 0;
+                        if (offlineDevicesEl) offlineDevicesEl.textContent = network.offline_devices || 0;
+                        
+                        // Update ML engine status
+                        fetch('/ml/status')
+                            .then(response => response.json())
+                            .then(mlData => {
+                                const mlStatusDot = document.getElementById('overview-ml-status-dot');
+                                const mlStatusText = document.getElementById('overview-ml-status-text');
+                                const modelStatus = document.getElementById('overview-model-status');
+                                const detectionAccuracy = document.getElementById('overview-detection-accuracy');
+                                
+                                if (mlData.status === 'active') {
+                                    if (mlStatusDot) {
+                                        mlStatusDot.className = 'status-dot-large active';
+                                    }
+                                    if (mlStatusText) mlStatusText.textContent = 'Active';
+                                } else {
+                                    if (mlStatusDot) {
+                                        mlStatusDot.className = 'status-dot-large error';
+                                    }
+                                    if (mlStatusText) mlStatusText.textContent = 'Inactive';
+                                }
+                                
+                                if (modelStatus && mlData.statistics) {
+                                    modelStatus.textContent = mlData.statistics.model_status || 'Unknown';
+                                }
+                                if (detectionAccuracy && mlData.statistics) {
+                                    detectionAccuracy.textContent = (mlData.statistics.detection_accuracy || 0).toFixed(1) + '%';
+                                }
+                            })
+                            .catch(() => {});
+                        
+                        // Update attack statistics
+                        const attackRateEl = document.getElementById('overview-attack-rate');
+                        const attackPacketsEl = document.getElementById('overview-attack-packets');
+                        if (attackRateEl) attackRateEl.textContent = (mlEngine.attack_rate || 0).toFixed(1) + '%';
+                        if (attackPacketsEl) attackPacketsEl.textContent = mlEngine.attack_packets || 0;
+                        
+                        // Update packets per minute from device stats
+                        const devices = stats.devices || {};
+                        let totalPacketsPerMin = 0;
+                        Object.values(devices).forEach(device => {
+                            totalPacketsPerMin += device.packets_per_minute || 0;
+                        });
+                        const packetsPerMinEl = document.getElementById('overview-packets-per-min');
+                        if (packetsPerMinEl) packetsPerMinEl.textContent = totalPacketsPerMin;
+                    }
+                })
+                .catch(() => {});
+            
+            // Update security alerts count
+            fetch('/api/alerts/suspicious_devices')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success' && data.alerts) {
+                        const alerts = data.alerts;
+                        const alertsCountEl = document.getElementById('overview-alerts-count');
+                        const highAlertsEl = document.getElementById('overview-high-alerts');
+                        const mediumAlertsEl = document.getElementById('overview-medium-alerts');
+                        
+                        if (alertsCountEl) alertsCountEl.textContent = alerts.length;
+                        
+                        const highCount = alerts.filter(a => a.severity === 'high').length;
+                        const mediumCount = alerts.filter(a => a.severity === 'medium').length;
+                        
+                        if (highAlertsEl) highAlertsEl.textContent = highCount;
+                        if (mediumAlertsEl) mediumAlertsEl.textContent = mediumCount;
+                    }
+                })
+                .catch(() => {});
+            
+            // Update honeypot status
+            fetch('/api/honeypot/redirected_devices')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        const honeypotStatusDot = document.getElementById('overview-honeypot-status-dot');
+                        const honeypotStatus = document.getElementById('overview-honeypot-status');
+                        const threatsCaptured = document.getElementById('overview-threats-captured');
+                        const redirectedDevices = document.getElementById('overview-redirected-devices');
+                        
+                        if (data.container_running) {
+                            if (honeypotStatusDot) honeypotStatusDot.className = 'status-dot active';
+                            if (honeypotStatus) honeypotStatus.textContent = 'Running';
+                        } else {
+                            if (honeypotStatusDot) honeypotStatusDot.className = 'status-dot';
+                            if (honeypotStatus) honeypotStatus.textContent = 'Stopped';
+                        }
+                        
+                        if (threatsCaptured) threatsCaptured.textContent = data.total_threats || 0;
+                        if (redirectedDevices) redirectedDevices.textContent = data.redirected_count || 0;
+                    }
+                })
+                .catch(() => {});
         }
 
         function updateDeviceTable(data) {
@@ -1718,10 +1973,57 @@
         }
 
         function updateHealthMetrics(data) {
+            // Update health bar based on real device online/offline status
             const healthBar = document.getElementById('system-health');
-            const avgHealth = Object.values(data).reduce((sum, metrics) => 
-                sum + (100 - metrics.cpu_usage/2 - metrics.memory_usage/2), 0) / Object.keys(data).length;
-            healthBar.style.width = `${avgHealth}%`;
+            const healthPercentageEl = document.getElementById('health-percentage');
+            
+            if (!healthBar) return;
+            
+            const devices = Object.values(data);
+            if (devices.length === 0) {
+                healthBar.style.width = '0%';
+                if (healthPercentageEl) healthPercentageEl.textContent = '0%';
+                return;
+            }
+            
+            // Calculate health based on online devices percentage
+            const onlineDevices = devices.filter(d => d.online === true || d.status === 'online').length;
+            const healthPercentage = (onlineDevices / devices.length) * 100;
+            healthBar.style.width = `${healthPercentage}%`;
+            if (healthPercentageEl) healthPercentageEl.textContent = `${healthPercentage.toFixed(0)}%`;
+        }
+        
+        function updateNetworkStatistics() {
+            fetch('/api/network/statistics?t=' + Date.now())
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success' && data.statistics) {
+                        const stats = data.statistics;
+                        
+                        // Update ML engine statistics if available
+                        if (stats.ml_engine) {
+                            const mlStats = stats.ml_engine;
+                            const totalPacketsEl = document.getElementById('total-packets');
+                            const attackPacketsEl = document.getElementById('attack-packets');
+                            const attackRateEl = document.getElementById('attack-rate');
+                            const modelConfidenceEl = document.getElementById('model-confidence');
+                            
+                            if (totalPacketsEl) totalPacketsEl.textContent = mlStats.total_packets || 0;
+                            if (attackPacketsEl) attackPacketsEl.textContent = mlStats.attack_packets || 0;
+                            if (attackRateEl) attackRateEl.textContent = `${(mlStats.attack_rate || 0).toFixed(1)}%`;
+                            if (modelConfidenceEl) modelConfidenceEl.textContent = `${(mlStats.detection_accuracy || 0).toFixed(1)}%`;
+                        }
+                        
+                        // Update network overview if available
+                        if (stats.network) {
+                            // Could add network-level stats display here if needed
+                            console.log('Network stats:', stats.network);
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching network statistics:', error);
+                });
         }
 
         function updatePolicyLogs() {
@@ -2163,23 +2465,121 @@
         }
 
         function updateAnalytics() {
-            // Placeholder for analytics implementation
-            document.getElementById('network-analytics').textContent = 'Network Load: 45%';
-            document.getElementById('system-metrics').textContent = 'Response Time: 120ms';
+            // Update network performance metrics
+            fetch('/api/network/statistics')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success' && data.statistics) {
+                        const stats = data.statistics;
+                        const network = stats.network || {};
+                        const mlEngine = stats.ml_engine || {};
+                        
+                        const totalPacketsEl = document.getElementById('analytics-total-packets');
+                        const packetsPerMinEl = document.getElementById('analytics-packets-per-min');
+                        const onlineDevicesEl = document.getElementById('analytics-online-devices');
+                        
+                        if (totalPacketsEl) totalPacketsEl.textContent = mlEngine.total_packets || network.total_network_packets || 0;
+                        
+                        // Calculate total packets per minute from device stats
+                        const devices = stats.devices || {};
+                        let totalPacketsPerMin = 0;
+                        Object.values(devices).forEach(device => {
+                            totalPacketsPerMin += device.packets_per_minute || 0;
+                        });
+                        if (packetsPerMinEl) packetsPerMinEl.textContent = totalPacketsPerMin;
+                        if (onlineDevicesEl) onlineDevicesEl.textContent = network.online_devices || 0;
+                    }
+                })
+                .catch(() => {});
             
-            const trafficAnalysis = document.getElementById('traffic-analysis');
-            trafficAnalysis.innerHTML = `
-                <div class="alert">
-                    <span>Average Packet Size: 256 bytes</span>
-                </div>
-                <div class="alert">
-                    <span>Bandwidth Usage: 2.5 Mbps</span>
-                </div>
-                <div class="alert">
-                    <span>Active Connections: 15</span>
-                </div>
-            `;
+            // Update system metrics
+            fetch('/get_health_metrics')
+                .then(response => response.json())
+                .then(data => {
+                    const devices = Object.values(data);
+                    if (devices.length > 0) {
+                        const onlineDevices = devices.filter(d => d.online === true || d.status === 'online').length;
+                        const healthPercentage = (onlineDevices / devices.length) * 100;
+                        const systemHealthEl = document.getElementById('analytics-system-health');
+                        if (systemHealthEl) systemHealthEl.textContent = healthPercentage.toFixed(0) + '%';
+                    }
+                })
+                .catch(() => {});
+            
+            // Update ML engine status
+            fetch('/ml/status')
+                .then(response => response.json())
+                .then(data => {
+                    const mlStatusEl = document.getElementById('analytics-ml-status');
+                    if (mlStatusEl) {
+                        mlStatusEl.textContent = data.status === 'active' ? 'Active' : 'Inactive';
+                    }
+                })
+                .catch(() => {});
+            
+            // Update honeypot status
+            fetch('/api/honeypot/redirected_devices')
+                .then(response => response.json())
+                .then(data => {
+                    const honeypotStatusEl = document.getElementById('analytics-honeypot-status');
+                    if (honeypotStatusEl) {
+                        honeypotStatusEl.textContent = data.container_running ? 'Running' : 'Stopped';
+                    }
+                })
+                .catch(() => {});
+            
+            // Update active alerts
+            fetch('/api/alerts/suspicious_devices')
+                .then(response => response.json())
+                .then(data => {
+                    const activeAlertsEl = document.getElementById('analytics-active-alerts');
+                    if (activeAlertsEl && data.status === 'success') {
+                        activeAlertsEl.textContent = data.alerts ? data.alerts.length : 0;
+                    }
+                })
+                .catch(() => {});
+            
+            // Update traffic analysis
+            fetch('/api/network/statistics')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success' && data.statistics) {
+                        const devices = data.statistics.devices || {};
+                        const trafficAnalysisEl = document.getElementById('traffic-analysis');
+                        if (trafficAnalysisEl) {
+                            const deviceList = Object.entries(devices).map(([deviceId, stats]) => {
+                                return `
+                                    <div style="padding: 0.75rem; border-bottom: 1px solid var(--border-color);">
+                                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                                            <div>
+                                                <strong>${deviceId}</strong>
+                                                <div style="font-size: 0.875rem; color: var(--text-secondary); margin-top: 0.25rem;">
+                                                    ${stats.packets_per_minute || 0} packets/min | 
+                                                    ${stats.is_online ? 'Online' : 'Offline'}
+                                                </div>
+                                            </div>
+                                            <div style="text-align: right;">
+                                                <div style="font-size: 1.25rem; font-weight: 600; color: var(--accent-color);">
+                                                    ${stats.total_packets || 0}
+                                                </div>
+                                                <div style="font-size: 0.75rem; color: var(--text-secondary);">total packets</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                `;
+                            }).join('');
+                            
+                            if (deviceList) {
+                                trafficAnalysisEl.innerHTML = deviceList;
+                            } else {
+                                trafficAnalysisEl.innerHTML = '<div class="loading-indicator">No traffic data available</div>';
+                            }
+                        }
+                    }
+                })
+                .catch(() => {});
         }
+        
 
         // Trust Scores Update Functions
         function updateTrustScores() {
@@ -2243,12 +2643,21 @@
             fetch('/api/honeypot/status')
                 .then(response => response.json())
                 .then(data => {
-                    const status = data.status || 'stopped';
-                    const running = status === 'running';
-                    document.getElementById('honeypot-status').textContent = running ? 'Running' : 'Stopped';
-                    document.getElementById('honeypot-status-label').textContent = running 
-                        ? 'Container Active' : 'Container Inactive';
-                    document.getElementById('honeypot-status').style.color = running ? '#4caf50' : '#f44336';
+                    // Check both 'status' and 'running' fields
+                    const status = data.status || (data.running ? 'running' : 'stopped');
+                    const running = status === 'running' || data.running === true;
+                    
+                    const statusEl = document.getElementById('honeypot-status');
+                    const labelEl = document.getElementById('honeypot-status-label');
+                    
+                    if (statusEl) {
+                        statusEl.textContent = running ? 'Running' : 'Stopped';
+                        statusEl.style.color = running ? '#4caf50' : '#f44336';
+                    }
+                    
+                    if (labelEl) {
+                        labelEl.textContent = running ? 'Container Active' : 'Container Inactive';
+                    }
                     
                     // Update threats
                     const threats = data.threats || [];
@@ -2290,6 +2699,26 @@
                 })
                 .catch(error => {
                     console.error('Error fetching honeypot status:', error);
+                    // On error, try to check via redirected_devices endpoint as fallback
+                    fetch('/api/honeypot/redirected_devices')
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.container_running !== undefined) {
+                                const running = data.container_running === true;
+                                const statusEl = document.getElementById('honeypot-status');
+                                const labelEl = document.getElementById('honeypot-status-label');
+                                
+                                if (statusEl) {
+                                    statusEl.textContent = running ? 'Running' : 'Stopped';
+                                    statusEl.style.color = running ? '#4caf50' : '#f44336';
+                                }
+                                
+                                if (labelEl) {
+                                    labelEl.textContent = running ? 'Container Active' : 'Container Inactive';
+                                }
+                            }
+                        })
+                        .catch(() => {});
                 });
         }
 
