@@ -1260,9 +1260,46 @@ def create_suspicious_device_alert(device_id, reason, severity, redirected=True)
 
 def update_alert_activity_counts():
     """Periodically update honeypot activity counts for alerts"""
-    # This would need access to threat_intelligence
-    # For now, this is a placeholder that can be enhanced
-    pass
+    # Try to get threat_intelligence if available
+    threat_intelligence = None
+    try:
+        # Check if threat_intelligence is available in global scope or can be imported
+        from honeypot_manager.threat_intelligence import ThreatIntelligence
+        # Note: threat_intelligence instance would need to be initialized elsewhere
+        # For now, we'll update counts if we can access it
+        pass
+    except ImportError:
+        pass
+    
+    # Update activity counts for each alert
+    for alert in suspicious_device_alerts:
+        device_id = alert.get('device_id')
+        if device_id and threat_intelligence:
+            try:
+                activity_count = threat_intelligence.get_device_activity_count(device_id)
+                alert['honeypot_activity_count'] = activity_count
+            except Exception as e:
+                app.logger.debug(f"Failed to update activity count for {device_id}: {e}")
+
+def start_activity_count_updater():
+    """Start background thread to periodically update honeypot activity counts"""
+    def activity_count_loop():
+        """Background loop to update activity counts"""
+        while True:
+            try:
+                update_alert_activity_counts()
+                time.sleep(10)  # Update every 10 seconds
+            except Exception as e:
+                app.logger.error(f"Activity count updater error: {e}")
+                time.sleep(30)  # Wait longer on error
+    
+    updater_thread = threading.Thread(
+        target=activity_count_loop,
+        name="ActivityCountUpdater",
+        daemon=True
+    )
+    updater_thread.start()
+    app.logger.info("✅ Activity count updater thread started")
 
 @app.route('/api/alerts/suspicious_devices', methods=['GET'])
 def get_suspicious_device_alerts():
