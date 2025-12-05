@@ -4,6 +4,7 @@ Handles redirection of suspicious traffic to honeypot network
 """
 
 import logging
+from datetime import datetime
 from .openflow_rules import OpenFlowRuleGenerator
 
 logger = logging.getLogger(__name__)
@@ -22,9 +23,10 @@ class TrafficRedirector:
         self.datapath = datapath
         self.honeypot_port = honeypot_port
         self.rule_generator = OpenFlowRuleGenerator(datapath)
-        self.active_redirects = {}  # Track active redirects: {device_id: match_fields}
+        # Track active redirects with metadata: {device_id: {'match_fields': {...}, 'timestamp': ..., 'reason': ...}}
+        self.active_redirects = {}
         
-    def redirect_to_honeypot(self, device_id, match_fields, priority=150):
+    def redirect_to_honeypot(self, device_id, match_fields, priority=150, reason=None):
         """
         Redirect traffic from a device to the honeypot
         
@@ -32,6 +34,7 @@ class TrafficRedirector:
             device_id: Identifier of the device
             match_fields: Match fields to identify device traffic
             priority: Rule priority
+            reason: Reason for redirection (optional)
             
         Returns:
             True if redirect successful, False otherwise
@@ -48,10 +51,15 @@ class TrafficRedirector:
             # Install rule
             self.rule_generator.install_rule(flow_mod)
             
-            # Track active redirect
-            self.active_redirects[device_id] = match_fields
+            # Track active redirect with metadata
+            self.active_redirects[device_id] = {
+                'match_fields': match_fields,
+                'timestamp': datetime.utcnow().isoformat(),
+                'reason': reason or 'suspicious_activity',
+                'priority': priority
+            }
             
-            logger.warning(f"Redirected traffic from {device_id} to honeypot (port {self.honeypot_port})")
+            logger.warning(f"Redirected traffic from {device_id} to honeypot (port {self.honeypot_port}, reason: {reason})")
             return True
             
         except Exception as e:
@@ -70,7 +78,8 @@ class TrafficRedirector:
             return
         
         try:
-            match_fields = self.active_redirects[device_id]
+            redirect_info = self.active_redirects[device_id]
+            match_fields = redirect_info.get('match_fields', {})
             flow_mod = self.rule_generator.delete_rule(
                 match_fields=match_fields,
                 cookie=self._device_cookie(device_id)
@@ -83,6 +92,15 @@ class TrafficRedirector:
             
         except Exception as e:
             logger.error(f"Failed to remove redirect for {device_id}: {e}")
+    
+    def get_redirected_devices(self):
+        """
+        Get list of all devices with active redirects and their metadata
+        
+        Returns:
+            Dictionary of {device_id: redirect_metadata}
+        """
+        return self.active_redirects.copy()
     
     def is_redirected(self, device_id):
         """

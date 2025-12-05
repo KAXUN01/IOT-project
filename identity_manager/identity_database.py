@@ -43,7 +43,8 @@ class IdentityDatabase:
                     device_info TEXT,
                     physical_identity TEXT,
                     first_seen TIMESTAMP,
-                    device_fingerprint TEXT
+                    device_fingerprint TEXT,
+                    ip_address TEXT
                 )
             ''')
             
@@ -127,6 +128,11 @@ class IdentityDatabase:
             if 'trust_score' not in columns:
                 cursor.execute('ALTER TABLE devices ADD COLUMN trust_score INTEGER DEFAULT 70')
                 logger.info("Added trust_score column to devices table")
+            
+            # Add ip_address column if it doesn't exist
+            if 'ip_address' not in columns:
+                cursor.execute('ALTER TABLE devices ADD COLUMN ip_address TEXT')
+                logger.info("Added ip_address column to devices table")
             
         except Exception as e:
             logger.warning(f"Database migration warning: {e}")
@@ -280,6 +286,76 @@ class IdentityDatabase:
         except Exception as e:
             logger.error(f"Failed to update device status: {e}")
             return False
+    
+    def update_device_ip(self, device_id: str, ip_address: str) -> bool:
+        """
+        Update device IP address
+        
+        Args:
+            device_id: Device identifier
+            ip_address: IP address
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            cursor.execute('UPDATE devices SET ip_address = ? WHERE device_id = ?', (ip_address, device_id))
+            
+            conn.commit()
+            conn.close()
+            
+            logger.debug(f"Device {device_id} IP updated to {ip_address}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to update device IP: {e}")
+            return False
+    
+    def get_device_ip(self, device_id: str) -> Optional[str]:
+        """
+        Get device IP address
+        
+        Args:
+            device_id: Device identifier
+            
+        Returns:
+            IP address or None
+        """
+        device = self.get_device(device_id)
+        if device:
+            return device.get('ip_address')
+        return None
+    
+    def get_device_from_ip(self, ip_address: str) -> Optional[Dict]:
+        """
+        Get device by IP address
+        
+        Args:
+            ip_address: IP address
+            
+        Returns:
+            Device information dictionary or None
+        """
+        try:
+            conn = sqlite3.connect(self.db_path)
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            
+            cursor.execute('SELECT * FROM devices WHERE ip_address = ?', (ip_address,))
+            row = cursor.fetchone()
+            
+            conn.close()
+            
+            if row:
+                return dict(row)
+            return None
+            
+        except Exception as e:
+            logger.error(f"Failed to get device by IP {ip_address}: {e}")
+            return None
     
     def update_last_seen(self, device_id: str) -> bool:
         """

@@ -60,6 +60,11 @@ if RYU_AVAILABLE:
             self.analyst_module = None
             self.trust_module = None
             self.flow_analyzer_manager = None  # Flow analyzer manager for flow stats
+            self.ml_engine = None  # ML security engine reference
+            
+            # Device-to-IP mapping cache (for fast lookups)
+            self.device_ip_map = {}  # {device_id: ip_address}
+            self.ip_device_map = {}  # {ip_address: device_id}
             
             # Honeypot port (default)
             self.honeypot_port = 3
@@ -91,6 +96,11 @@ if RYU_AVAILABLE:
             """Set reference to flow analyzer manager for flow statistics"""
             self.flow_analyzer_manager = flow_analyzer_manager
             logger.info("Flow analyzer manager connected")
+        
+        def set_ml_engine(self, ml_engine):
+            """Set reference to ML security engine for suspicious device detection"""
+            self.ml_engine = ml_engine
+            logger.info("ML engine connected to SDN policy engine")
         
         @set_ev_cls(ofp_event.EventOFPSwitchFeatures, CONFIG_DISPATCHER)
         def switch_features_handler(self, ev):
@@ -185,6 +195,10 @@ if RYU_AVAILABLE:
                         packet_info['src_ip'] = ip_pkt.src
                         packet_info['protocol'] = ip_pkt.proto
                         
+                        # Store device-to-IP mapping
+                        if device_id and ip_pkt.src:
+                            self._update_device_ip_mapping(device_id, ip_pkt.src)
+                        
                         # Try to get TCP/UDP port information
                         tcp_pkt = pkt.get_protocol(tcp.tcp)
                         udp_pkt = pkt.get_protocol(udp.udp)
@@ -252,7 +266,7 @@ if RYU_AVAILABLE:
                 datapath.send_msg(mod)
                 logger.warning(f"Quarantined device {device_id} ({eth_src})")
         
-        def apply_policy(self, device_id, action, match_fields=None, priority=100):
+        def apply_policy(self, device_id, action, match_fields=None, priority=100, reason=None):
             """
             Apply a policy to a device across all switches
             
@@ -261,6 +275,7 @@ if RYU_AVAILABLE:
                 action: Policy action ('allow', 'deny', 'redirect', 'quarantine')
                 match_fields: Match fields for the rule (default: device MAC)
                 priority: Rule priority
+                reason: Reason for policy application (optional)
             """
             if match_fields is None:
                 # Get device MAC from identity module
@@ -279,7 +294,8 @@ if RYU_AVAILABLE:
             self.device_policies[device_id] = {
                 'action': action,
                 'match_fields': match_fields,
-                'priority': priority
+                'priority': priority,
+                'reason': reason
             }
             
             # Apply to all switches
@@ -292,7 +308,7 @@ if RYU_AVAILABLE:
                     elif action == 'redirect':
                         if dpid in self.traffic_redirectors:
                             self.traffic_redirectors[dpid].redirect_to_honeypot(
-                                device_id, match_fields, priority
+                                device_id, match_fields, priority, reason=reason
                             )
                         continue
                     elif action == 'quarantine':
@@ -382,6 +398,139 @@ if RYU_AVAILABLE:
                 return self.identity_module.get_device_id_from_mac(mac_address)
             return None
         
+        def _update_device_ip_mapping(self, device_id, ip_address):
+            """
+            Update device-to-IP mapping in cache and database
+            
+            Args:
+                device_id: Device identifier
+                ip_address: IP address
+            """
+            # Update cache
+            old_ip = self.device_ip_map.get(device_id)
+            if old_ip and old_ip != ip_address:
+                # Remove old mapping
+                if old_ip in self.ip_device_map:
+                    del self.ip_device_map[old_ip]
+            
+            self.device_ip_map[device_id] = ip_address
+            self.ip_device_map[ip_address] = device_id
+            
+            # Update database
+            if self.identity_module and self.identity_module.identity_db:
+                self.identity_module.identity_db.update_device_ip(device_id, ip_address)
+        
+        def get_device_ip(self, device_id):
+            """
+            Get IP address for a device
+            
+            Args:
+                device_id: Device identifier
+                
+            Returns:
+                IP address or None
+            """
+            # Check cache first
+            if device_id in self.device_ip_map:
+                return self.device_ip_map[device_id]
+            
+            # Check database
+            if self.identity_module and self.identity_module.identity_db:
+                ip = self.identity_module.identity_db.get_device_ip(device_id)
+                if ip:
+                    self.device_ip_map[device_id] = ip
+                    self.ip_device_map[ip] = device_id
+                return ip
+            
+            return None
+        
+        def get_device_from_ip(self, ip_address):
+            """
+            Get device ID from IP address
+            
+            Args:
+                ip_address: IP address
+                
+            Returns:
+                Device ID or None
+            """
+            # Check cache first
+            if ip_address in self.ip_device_map:
+                return self.ip_device_map[ip_address]
+            
+            # Check database
+            if self.identity_module and self.identity_module.identity_db:
+                device = self.identity_module.identity_db.get_device_from_ip(ip_address)
+                if device:
+                    device_id = device['device_id']
+                    self.device_ip_map[device_id] = ip_address
+                    self.ip_device_map[ip_address] = device_id
+                    return device_id
+            
+            return None
+        
+        def is_suspicious_device(self, device_id):
+            """
+            Check if a device is suspicious based on multiple criteria
+            
+            Args:
+                device_id: Device identifier
+                
+            Returns:
+                Tuple of (is_suspicious: bool, reason: str, severity: str)
+            """
+            reasons = []
+            max_severity = 'low'
+            
+            # Check ML engine detections
+            if self.ml_engine and hasattr(self.ml_engine, 'attack_detections'):
+                recent_attacks = [
+                    d for d in self.ml_engine.attack_detections
+                    if d.get('device_id') == device_id and d.get('is_attack', False)
+                ]
+                if recent_attacks:
+                    high_confidence = [a for a in recent_attacks if a.get('confidence', 0) > 0.8]
+                    if high_confidence:
+                        reasons.append('ml_detection')
+                        max_severity = 'high'
+                    elif recent_attacks:
+                        reasons.append('ml_detection')
+                        if max_severity == 'low':
+                            max_severity = 'medium'
+            
+            # Check anomaly detector
+            if self.analyst_module and hasattr(self.analyst_module, 'get_recent_alerts'):
+                alerts = self.analyst_module.get_recent_alerts(limit=100)
+                device_alerts = [
+                    a for a in alerts
+                    if a.get('device_id') == device_id and a.get('is_anomaly', False)
+                ]
+                if device_alerts:
+                    high_severity_alerts = [a for a in device_alerts if a.get('severity') in ['high', 'medium']]
+                    if high_severity_alerts:
+                        reasons.append('anomaly')
+                        if any(a.get('severity') == 'high' for a in high_severity_alerts):
+                            max_severity = 'high'
+                        elif max_severity == 'low':
+                            max_severity = 'medium'
+            
+            # Check trust score
+            if self.trust_module:
+                trust_score = self.trust_module.get_trust_score(device_id)
+                if trust_score is not None:
+                    if trust_score < 30:
+                        reasons.append('trust_score_critical')
+                        max_severity = 'high'
+                    elif trust_score < 50:
+                        reasons.append('trust_score_low')
+                        if max_severity == 'low':
+                            max_severity = 'medium'
+            
+            is_suspicious = len(reasons) > 0
+            reason = ', '.join(reasons) if reasons else 'none'
+            
+            return is_suspicious, reason, max_severity
+        
         def handle_analyst_alert(self, device_id, alert_type, severity):
             """
             Handle alert from heuristic analyst module
@@ -395,11 +544,21 @@ if RYU_AVAILABLE:
             
             # Apply redirect policy for suspicious activity
             if severity in ['medium', 'high']:
-                self.apply_policy(device_id, 'redirect')
+                reason = f"anomaly:{alert_type}"
+                self.apply_policy(device_id, 'redirect', reason=reason)
                 
                 # Notify trust module to lower trust score
                 if self.trust_module:
                     self.trust_module.adjust_trust_score(device_id, -20, f"Analyst alert: {alert_type}")
+                
+                # Return info for alert creation
+                return {
+                    'redirected': True,
+                    'reason': reason,
+                    'severity': severity
+                }
+            
+            return {'redirected': False}
         
         def handle_trust_score_change(self, device_id, new_score):
             """
@@ -409,15 +568,47 @@ if RYU_AVAILABLE:
                 device_id: Device identifier
                 new_score: New trust score (0-100)
             """
+            # Check if device is already redirected
+            is_already_redirected = False
+            for dpid, redirector in self.traffic_redirectors.items():
+                if redirector.is_redirected(device_id):
+                    is_already_redirected = True
+                    break
+            
             # Adjust policy based on trust score
             if new_score < 30:
-                self.apply_policy(device_id, 'quarantine')
+                self.apply_policy(device_id, 'quarantine', reason='trust_score_critical')
             elif new_score < 50:
-                self.apply_policy(device_id, 'deny')
+                self.apply_policy(device_id, 'deny', reason='trust_score_low')
             elif new_score < 70:
-                self.apply_policy(device_id, 'redirect')
+                if not is_already_redirected:
+                    self.apply_policy(device_id, 'redirect', reason='trust_score_suspicious')
             else:
                 self.apply_policy(device_id, 'allow')
+            
+            # Check if device should be redirected based on trust score
+            if new_score < 50 and not is_already_redirected:
+                is_suspicious, reason, severity = self.is_suspicious_device(device_id)
+                if is_suspicious:
+                    # Try to create dashboard alert
+                    try:
+                        import requests
+                        requests.post('http://localhost:5000/api/alerts/create', json={
+                            'device_id': device_id,
+                            'reason': reason,
+                            'severity': severity,
+                            'redirected': True
+                        }, timeout=1)
+                    except:
+                        logger.debug(f"Could not create dashboard alert for {device_id}")
+                    
+                    return {
+                        'redirected': True,
+                        'reason': reason,
+                        'severity': severity
+                    }
+            
+            return {'redirected': is_already_redirected}
         
         def apply_policy_from_identity(self, device_id, policy):
             """

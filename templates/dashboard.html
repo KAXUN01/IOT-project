@@ -1616,6 +1616,15 @@
                 updateMLMetrics();
                 updateMLDetections();
             }
+            
+            // Auto-refresh suspicious device alerts every 5 seconds (separate from main update)
+            if (!window.suspiciousAlertsInterval) {
+                window.suspiciousAlertsInterval = setInterval(() => {
+                    if (document.getElementById('security')?.classList.contains('active')) {
+                        updateSecurityAlerts();
+                    }
+                }, 5000);
+            }
 
             if (document.getElementById('analytics').classList.contains('active')) {
                 updateAnalytics();
@@ -1768,26 +1777,59 @@
         }
 
         function updateSecurityAlerts() {
-            fetch('/get_security_alerts')
-                .then(response => response.json())
-                .then(alerts => {
+            // Fetch both regular security alerts and suspicious device alerts
+            Promise.all([
+                fetch('/get_security_alerts').then(r => r.json()),
+                fetch('/api/alerts/suspicious_devices').then(r => r.json())
+            ])
+                .then(([alerts, suspiciousData]) => {
                     const container = document.querySelector('#security-alerts .alerts-list');
-                    const activeFilter = document.querySelector('.filter-btn.active').dataset.severity;
+                    const activeFilter = document.querySelector('.filter-btn.active')?.dataset.severity || 'all';
                     
-                    const filteredAlerts = alerts.filter(alert => 
+                    // Combine alerts
+                    let allAlerts = alerts || [];
+                    
+                    // Add suspicious device alerts
+                    if (suspiciousData && suspiciousData.status === 'success' && suspiciousData.alerts) {
+                        suspiciousData.alerts.forEach(alert => {
+                            allAlerts.push({
+                                timestamp: alert.timestamp,
+                                message: `Suspicious device detected: ${alert.device_id} (${alert.reason})${alert.redirected ? ' - Redirected to honeypot' : ''}`,
+                                severity: alert.severity,
+                                device: alert.device_id,
+                                redirected: alert.redirected,
+                                activity_count: alert.honeypot_activity_count || 0
+                            });
+                        });
+                    }
+                    
+                    // Sort by timestamp (newest first)
+                    allAlerts.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+                    
+                    const filteredAlerts = allAlerts.filter(alert => 
                         activeFilter === 'all' || alert.severity === activeFilter
                     );
 
-                    container.innerHTML = filteredAlerts.map(alert => `
-                        <div class="alert ${alert.severity}">
+                    container.innerHTML = filteredAlerts.map(alert => {
+                        const severityClass = alert.severity || 'low';
+                        const isRedirected = alert.redirected || false;
+                        const activityCount = alert.activity_count || 0;
+                        
+                        return `
+                        <div class="alert ${severityClass} ${isRedirected ? 'redirected' : ''}">
                             <div class="alert-header">
-                                <span class="alert-severity">${alert.severity.toUpperCase()}</span>
+                                <span class="alert-severity">${severityClass.toUpperCase()}</span>
                                 <span class="alert-timestamp">${new Date(alert.timestamp).toLocaleTimeString()}</span>
                             </div>
                             <div class="alert-message">${alert.message}</div>
                             ${alert.device ? `<div class="alert-device">Device: ${alert.device}</div>` : ''}
+                            ${isRedirected ? `<div class="alert-honeypot">🔴 Redirected to honeypot${activityCount > 0 ? ` (${activityCount} activities logged)` : ''}</div>` : ''}
                         </div>
-                    `).join('');
+                    `;
+                    }).join('');
+                })
+                .catch(error => {
+                    console.error('Error updating security alerts:', error);
                 });
         }
 

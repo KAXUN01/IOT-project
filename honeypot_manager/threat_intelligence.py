@@ -14,11 +14,18 @@ logger = logging.getLogger(__name__)
 class ThreatIntelligence:
     """Manages threat intelligence from honeypots"""
     
-    def __init__(self):
-        """Initialize threat intelligence manager"""
+    def __init__(self, ip_to_device_mapper=None):
+        """
+        Initialize threat intelligence manager
+        
+        Args:
+            ip_to_device_mapper: Function to map IP address to device_id (optional)
+        """
         self.log_parser = HoneypotLogParser()
         self.blocked_ips = {}  # {ip: {'blocked_at': timestamp, 'reason': reason}}
         self.mitigation_rules = []  # List of mitigation rules generated
+        self.device_activities = {}  # {device_id: [threat_events]}
+        self.ip_to_device_mapper = ip_to_device_mapper  # Function to map IP -> device_id
     
     def process_logs(self, log_content: str) -> List[Dict]:
         """
@@ -32,11 +39,54 @@ class ThreatIntelligence:
         """
         threats = self.log_parser.parse_logs(log_content)
         
-        # Analyze threats and generate mitigation rules
+        # Map IP addresses to device IDs and associate threats with devices
         for threat in threats:
+            src_ip = threat.get('source_ip')
+            if src_ip and self.ip_to_device_mapper:
+                try:
+                    device_id = self.ip_to_device_mapper(src_ip)
+                    if device_id:
+                        threat['device_id'] = device_id
+                        # Store in device activities
+                        if device_id not in self.device_activities:
+                            self.device_activities[device_id] = []
+                        self.device_activities[device_id].append(threat)
+                        # Keep only last 1000 activities per device
+                        if len(self.device_activities[device_id]) > 1000:
+                            self.device_activities[device_id] = self.device_activities[device_id][-1000:]
+                except Exception as e:
+                    logger.debug(f"Failed to map IP {src_ip} to device_id: {e}")
+            
+            # Analyze threats and generate mitigation rules
             self._analyze_threat(threat)
         
         return threats
+    
+    def get_device_activity(self, device_id: str, limit: int = 100) -> List[Dict]:
+        """
+        Get honeypot activity for a specific device
+        
+        Args:
+            device_id: Device identifier
+            limit: Maximum number of activities to return
+            
+        Returns:
+            List of threat dictionaries for the device
+        """
+        activities = self.device_activities.get(device_id, [])
+        return activities[-limit:] if limit else activities
+    
+    def get_device_activity_count(self, device_id: str) -> int:
+        """
+        Get count of honeypot activities for a device
+        
+        Args:
+            device_id: Device identifier
+            
+        Returns:
+            Number of activities
+        """
+        return len(self.device_activities.get(device_id, []))
     
     def _analyze_threat(self, threat: Dict):
         """

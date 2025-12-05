@@ -81,7 +81,14 @@ class ZeroTrustFramework:
         self.honeypot_deployer = HoneypotDeployer(
             honeypot_type=self.config.get('honeypot_type', 'cowrie')
         )
-        self.threat_intelligence = ThreatIntelligence()
+        # Create IP to device mapper function
+        def ip_to_device_mapper(ip_address):
+            """Map IP address to device_id"""
+            if self.sdn_policy_engine:
+                return self.sdn_policy_engine.get_device_from_ip(ip_address)
+            return None
+        
+        self.threat_intelligence = ThreatIntelligence(ip_to_device_mapper=ip_to_device_mapper)
         self.mitigation_generator = MitigationGenerator()
         
         # SDN Policy Engine (will be set when Ryu controller starts)
@@ -129,6 +136,15 @@ class ZeroTrustFramework:
         
         # Connect flow analyzer manager to SDN policy engine
         sdn_policy_engine.set_flow_analyzer_manager(self.flow_analyzer_manager)
+        
+        # Set ML engine reference in SDN policy engine for suspicious device detection
+        try:
+            from ml_security_engine import get_ml_engine
+            ml_engine = get_ml_engine()
+            if ml_engine:
+                sdn_policy_engine.set_ml_engine(ml_engine)
+        except Exception as e:
+            logger.debug(f"Could not connect ML engine to SDN policy engine: {e}")
         
         # Set up flow analyzer manager with existing switches
         if hasattr(sdn_policy_engine, 'switch_datapaths'):
@@ -211,6 +227,29 @@ class ZeroTrustFramework:
                                 # Generate mitigation rules
                                 rules = self.mitigation_generator.generate_rules_from_threats(threats)
                                 logger.info(f"Generated {len(rules)} mitigation rules from honeypot")
+                                
+                                # Update dashboard alerts with activity counts
+                                # Group threats by device_id and update activity counts
+                                device_threat_counts = {}
+                                for threat in threats:
+                                    device_id = threat.get('device_id')
+                                    if device_id:
+                                        device_threat_counts[device_id] = device_threat_counts.get(device_id, 0) + 1
+                                
+                                # Update alerts via HTTP request to controller
+                                for device_id, count in device_threat_counts.items():
+                                    try:
+                                        import requests
+                                        # Update activity count by fetching device activity
+                                        # The endpoint will update the alert with the count
+                                        activity_count = self.threat_intelligence.get_device_activity_count(device_id)
+                                        # Update alert via API
+                                        requests.post('http://localhost:5000/api/alerts/update_activity', json={
+                                            'device_id': device_id,
+                                            'activity_count': activity_count
+                                        }, timeout=1)
+                                    except Exception as e:
+                                        logger.debug(f"Could not update activity count for {device_id}: {e}")
                 except Exception as e:
                     logger.error(f"Error monitoring honeypot logs: {e}")
                 
@@ -326,7 +365,21 @@ class ZeroTrustFramework:
                             )
                             
                             # Handle alert through framework
-                            self.handle_analyst_alert(device_id, alert_type, severity)
+                            redirect_result = self.handle_analyst_alert(device_id, alert_type, severity)
+                            
+                            # Create dashboard alert if device was redirected
+                            if redirect_result and redirect_result.get('redirected'):
+                                try:
+                                    import requests
+                                    requests.post('http://localhost:5000/api/alerts/create', json={
+                                        'device_id': device_id,
+                                        'reason': redirect_result.get('reason', alert_type),
+                                        'severity': redirect_result.get('severity', severity),
+                                        'redirected': True
+                                    }, timeout=1)
+                                except:
+                                    # If controller not available, log it
+                                    logger.info(f"Would create alert for {device_id}: {alert_type}")
                             
                             # Use traffic orchestrator for intelligent policy decision
                             if self.traffic_orchestrator:
@@ -430,16 +483,22 @@ class ZeroTrustFramework:
             device_id: Device identifier
             alert_type: Type of alert
             severity: Alert severity
+            
+        Returns:
+            Dictionary with redirect information
         """
         # Record in trust scorer
         self.trust_scorer.record_security_alert(device_id, alert_type, severity)
         
         # Notify SDN policy engine
+        redirect_result = None
         if self.sdn_policy_engine:
-            self.sdn_policy_engine.handle_analyst_alert(device_id, alert_type, severity)
+            redirect_result = self.sdn_policy_engine.handle_analyst_alert(device_id, alert_type, severity)
         
         # Adapt policy
         self.policy_adapter.adapt_policy_for_device(device_id)
+        
+        return redirect_result or {'redirected': False}
     
     def get_status(self) -> dict:
         """

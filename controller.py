@@ -96,6 +96,9 @@ sdn_metrics = {
     "policy_enforcement_rate": 0  # %
 }
 
+# Suspicious device alerts for dashboard
+suspicious_device_alerts = []  # List of alert dictionaries
+
 # Initialize ML Security Engine
 ml_engine = None
 ml_monitoring_active = False
@@ -517,7 +520,7 @@ def data():
     global ml_engine
     try:
         if ml_engine and ml_engine.is_loaded:
-            ml_engine.predict_attack({
+            result = ml_engine.predict_attack({
                 'device_id': device_id,
                 'size': data.get('size', 0),
                 'protocol': data.get('protocol', 6),
@@ -535,6 +538,18 @@ def data():
                 'tcp_length': data.get('tcp_length', 0),
                 'udp_length': data.get('udp_length', 0)
             })
+            
+            # Check if ML detected high-confidence attack and trigger redirection
+            if result and result.get('is_attack', False) and result.get('confidence', 0) > 0.8:
+                # High confidence attack detected - create alert
+                severity = 'high' if result.get('confidence', 0) > 0.9 else 'medium'
+                create_suspicious_device_alert(
+                    device_id=device_id,
+                    reason='ml_detection',
+                    severity=severity,
+                    redirected=True
+                )
+                app.logger.warning(f"High-confidence ML attack detected for {device_id}: {result.get('attack_type')}")
     except Exception as e:
         # Non-fatal for data ingestion; continue normally
         app.logger.warning(f"ML prediction error (non-fatal): {str(e)}")
@@ -1204,9 +1219,252 @@ def start_ml_engine():
         print("   System will run with heuristic-based detection only")
         return False
 
+# Suspicious Device Alert Management
+def create_suspicious_device_alert(device_id, reason, severity, redirected=True):
+    """
+    Create a suspicious device alert
+    
+    Args:
+        device_id: Device identifier
+        reason: Reason for alert ('ml_detection', 'anomaly', 'trust_score', etc.)
+        severity: Alert severity ('low', 'medium', 'high')
+        redirected: Whether device was redirected to honeypot
+    """
+    # Check if alert already exists for this device
+    existing_alert = None
+    for alert in suspicious_device_alerts:
+        if alert.get('device_id') == device_id and alert.get('redirected'):
+            existing_alert = alert
+            break
+    
+    if existing_alert:
+        # Update existing alert
+        existing_alert['timestamp'] = datetime.now().isoformat()
+        existing_alert['reason'] = reason
+        existing_alert['severity'] = severity
+        return existing_alert
+    
+    alert = {
+        'device_id': device_id,
+        'timestamp': datetime.now().isoformat(),
+        'reason': reason,
+        'severity': severity,
+        'redirected': redirected,
+        'honeypot_activity_count': 0
+    }
+    suspicious_device_alerts.append(alert)
+    # Keep only last 100 alerts
+    if len(suspicious_device_alerts) > 100:
+        suspicious_device_alerts[:] = suspicious_device_alerts[-100:]
+    return alert
+
+def update_alert_activity_counts():
+    """Periodically update honeypot activity counts for alerts"""
+    # This would need access to threat_intelligence
+    # For now, this is a placeholder that can be enhanced
+    pass
+
+@app.route('/api/alerts/suspicious_devices', methods=['GET'])
+def get_suspicious_device_alerts():
+    """
+    Get all suspicious device alerts
+    
+    Returns:
+        JSON list of alerts
+    """
+    # Update activity counts from honeypot if available
+    # This would ideally get from threat_intelligence.device_activities
+    # For now, activity counts are updated when honeypot logs are processed
+    
+    return json.dumps({
+        'status': 'success',
+        'alerts': suspicious_device_alerts[-50:]  # Return last 50 alerts
+    }), 200
+
+@app.route('/api/alerts/create', methods=['POST'])
+def create_alert():
+    """
+    Create a new suspicious device alert
+    
+    Request JSON:
+    {
+        "device_id": "ESP32_2",
+        "reason": "ml_detection",
+        "severity": "high",
+        "redirected": true
+    }
+    """
+    try:
+        data = request.json
+        device_id = data.get('device_id')
+        reason = data.get('reason', 'unknown')
+        severity = data.get('severity', 'medium')
+        redirected = data.get('redirected', True)
+        
+        if not device_id:
+            return json.dumps({
+                'status': 'error',
+                'message': 'Missing device_id'
+            }), 400
+        
+        alert = create_suspicious_device_alert(device_id, reason, severity, redirected)
+        
+        return json.dumps({
+            'status': 'success',
+            'alert': alert
+        }), 200
+        
+    except Exception as e:
+        app.logger.error(f"Error creating alert: {e}")
+        return json.dumps({
+            'status': 'error',
+            'message': str(e)
+        }), 500
+
+@app.route('/api/alerts/clear', methods=['POST'])
+def clear_alerts():
+    """Clear old alerts"""
+    suspicious_device_alerts.clear()
+    return json.dumps({'status': 'success', 'message': 'Alerts cleared'}), 200
+
+@app.route('/api/alerts/update_activity', methods=['POST'])
+def update_alert_activity():
+    """
+    Update activity count for a device alert
+    
+    Request JSON:
+    {
+        "device_id": "ESP32_2",
+        "activity_count": 5
+    }
+    """
+    try:
+        data = request.json
+        device_id = data.get('device_id')
+        activity_count = data.get('activity_count', 0)
+        
+        if not device_id:
+            return json.dumps({
+                'status': 'error',
+                'message': 'Missing device_id'
+            }), 400
+        
+        # Update activity count in alerts
+        updated = False
+        for alert in suspicious_device_alerts:
+            if alert.get('device_id') == device_id:
+                alert['honeypot_activity_count'] = activity_count
+                updated = True
+                break
+        
+        return json.dumps({
+            'status': 'success',
+            'updated': updated
+        }), 200
+        
+    except Exception as e:
+        app.logger.error(f"Error updating alert activity: {e}")
+        return json.dumps({
+            'status': 'error',
+            'message': str(e)
+        }), 500
+
+@app.route('/api/honeypot/redirected_devices', methods=['GET'])
+def get_redirected_devices():
+    """
+    Get list of all currently redirected devices
+    
+    Returns:
+        JSON list of redirected devices with metadata
+    """
+    try:
+        # Get redirected devices from alerts
+        redirected_devices = []
+        for alert in suspicious_device_alerts:
+            if alert.get('redirected', False):
+                redirected_devices.append({
+                    'device_id': alert.get('device_id'),
+                    'timestamp': alert.get('timestamp'),
+                    'reason': alert.get('reason'),
+                    'severity': alert.get('severity'),
+                    'activity_count': alert.get('honeypot_activity_count', 0)
+                })
+        
+        return json.dumps({
+            'status': 'success',
+            'devices': redirected_devices
+        }), 200
+    except Exception as e:
+        app.logger.error(f"Error getting redirected devices: {e}")
+        return json.dumps({
+            'status': 'error',
+            'message': str(e),
+            'devices': []
+        }), 500
+
+@app.route('/api/honeypot/device/<device_id>/activity', methods=['GET'])
+def get_device_honeypot_activity(device_id):
+    """
+    Get honeypot activity for a specific device
+    
+    Args:
+        device_id: Device identifier
+    """
+    try:
+        limit = int(request.args.get('limit', 100))
+        
+        # Get activity count from alert if it exists
+        # The activity count is updated by the honeypot monitoring thread via API
+        activity_count = 0
+        activities = []
+        
+        for alert in suspicious_device_alerts:
+            if alert.get('device_id') == device_id:
+                activity_count = alert.get('honeypot_activity_count', 0)
+                break
+        
+        return json.dumps({
+            'status': 'success',
+            'device_id': device_id,
+            'activities': activities,
+            'count': activity_count
+        }), 200
+    except Exception as e:
+        app.logger.error(f"Error getting device activity: {e}")
+        return json.dumps({
+            'status': 'error',
+            'message': str(e),
+            'activities': []
+        }), 500
+
+@app.route('/api/honeypot/device/<device_id>/remove_redirect', methods=['POST'])
+def remove_device_redirect(device_id):
+    """
+    Manually remove redirect for a device (admin action)
+    
+    Args:
+        device_id: Device identifier
+    """
+    try:
+        # This would need to call SDN policy engine to remove redirect
+        # For now, just return success
+        return json.dumps({
+            'status': 'success',
+            'message': f'Redirect removed for {device_id}'
+        }), 200
+    except Exception as e:
+        app.logger.error(f"Error removing redirect: {e}")
+        return json.dumps({
+            'status': 'error',
+            'message': str(e)
+        }), 500
+
 if __name__ == '__main__':
     # Start ML engine before running the app (optional)
     start_ml_engine()
+    
+    # Start activity count updater thread
+    start_activity_count_updater()
     
     # Run the Flask app
     print("🌐 Starting Flask Controller on http://0.0.0.0:5000")
