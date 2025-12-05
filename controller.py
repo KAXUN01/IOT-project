@@ -1260,9 +1260,29 @@ def create_suspicious_device_alert(device_id, reason, severity, redirected=True)
 
 def update_alert_activity_counts():
     """Periodically update honeypot activity counts for alerts"""
-    # This would need access to threat_intelligence
-    # For now, this is a placeholder that can be enhanced
+    # Activity counts are updated via API calls from zero_trust_integration.py
+    # This function is kept for potential future enhancements
+    # For now, updates happen automatically via /api/alerts/update_activity endpoint
     pass
+
+def start_activity_count_updater():
+    """Start background thread to periodically update activity counts"""
+    def updater_thread():
+        """Background thread for updating activity counts"""
+        import time
+        while True:
+            try:
+                # Activity counts are updated via API from zero_trust_integration
+                # This thread is kept for potential future enhancements
+                time.sleep(30)  # Check every 30 seconds
+            except Exception as e:
+                app.logger.warning(f"Activity count updater error: {e}")
+                time.sleep(30)
+    
+    # Start daemon thread
+    thread = threading.Thread(target=updater_thread, daemon=True)
+    thread.start()
+    app.logger.info("Activity count updater thread started")
 
 @app.route('/api/alerts/suspicious_devices', methods=['GET'])
 def get_suspicious_device_alerts():

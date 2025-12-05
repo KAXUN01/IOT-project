@@ -2,6 +2,7 @@
 
 # Zero Trust SDN Framework - Complete System Startup Script
 # Automatically starts all components of the Zero Trust SDN Framework
+# Includes: ML-based DDoS detection, Honeypot Management, Suspicious Device Redirection, Dashboard Alerts
 
 # Don't exit on error for process checks
 set +e
@@ -32,6 +33,7 @@ CONTROLLER_PID=""
 RYU_PID=""
 ZERO_TRUST_PID=""
 MININET_PID=""
+HONEYPOT_CONTAINER=""
 
 # Status flags to prevent repeated warnings
 CONTROLLER_STOPPED_REPORTED="false"
@@ -65,6 +67,12 @@ cleanup() {
         kill $MININET_PID 2>/dev/null || true
         # Mininet may need special cleanup
         sudo mn -c 2>/dev/null || true
+    fi
+    
+    # Stop honeypot container if it was started by this script
+    if [ ! -z "$HONEYPOT_CONTAINER" ] && command -v docker &> /dev/null; then
+        echo "   Stopping honeypot container..."
+        docker stop "$HONEYPOT_CONTAINER" 2>/dev/null || true
     fi
     
     # Wait for processes to terminate
@@ -102,8 +110,10 @@ echo -e "${BLUE}║                                                             
 echo -e "${BLUE}║  • Flask Controller (Web Dashboard & API)                                  ║${NC}"
 echo -e "${BLUE}║  • Ryu SDN Controller (OpenFlow Policy Enforcement)                        ║${NC}"
 echo -e "${BLUE}║  • Zero Trust Integration Framework                                        ║${NC}"
-echo -e "${BLUE}║  • Honeypot Management (Optional)                                          ║${NC}"
-echo -e "${BLUE}║  • Virtual IoT Devices (Optional)                                           ║${NC}"
+echo -e "${BLUE}║  • ML-Based DDoS Detection (TensorFlow/Keras)                             ║${NC}"
+echo -e "${BLUE}║  • Honeypot Management (Suspicious Device Redirection)                     ║${NC}"
+echo -e "${BLUE}║  • Dashboard Alerts & Threat Intelligence                                  ║${NC}"
+echo -e "${BLUE}║  • Virtual IoT Devices (Optional)                                          ║${NC}"
 echo -e "${BLUE}╚══════════════════════════════════════════════════════════════════════════════╝${NC}"
 echo ""
 
@@ -248,6 +258,26 @@ else
     fi
 fi
 
+# Check TensorFlow/Keras (optional, for ML model)
+if $PYTHON_CMD -c "import tensorflow" 2>/dev/null || $PYTHON_CMD -c "import keras" 2>/dev/null; then
+    TENSORFLOW_AVAILABLE=true
+    echo -e "${GREEN}  ✅ TensorFlow/Keras (ML model support)${NC}"
+else
+    TENSORFLOW_AVAILABLE=false
+    echo -e "${YELLOW}  ⚠️  TensorFlow/Keras not found (optional, for ML-based DDoS detection)${NC}"
+    echo -e "${YELLOW}     ML detection will use fallback heuristics${NC}"
+    read -p "     Install TensorFlow? [y/N]: " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        if install_package "tensorflow" "tensorflow"; then
+            TENSORFLOW_AVAILABLE=true
+            echo -e "${GREEN}  ✅ TensorFlow/Keras${NC}"
+        else
+            echo -e "${YELLOW}  ⚠️  TensorFlow installation failed (will use fallback detection)${NC}"
+        fi
+    fi
+fi
+
 # Check cryptography (optional, for Zero Trust)
 if $PYTHON_CMD -c "import cryptography" 2>/dev/null; then
     CRYPTOGRAPHY_AVAILABLE=true
@@ -286,44 +316,72 @@ else
     fi
 fi
 
-# Check Docker (optional)
-if command -v docker &> /dev/null && $PYTHON_CMD -c "import docker" 2>/dev/null; then
-    DOCKER_AVAILABLE=true
-    echo -e "${GREEN}  ✅ Docker${NC}"
-else
-    DOCKER_AVAILABLE=false
-    echo -e "${YELLOW}  ⚠️  Docker not found (optional, for honeypot)${NC}"
-    
-    # Check if docker command exists but Python module doesn't
-    if command -v docker &> /dev/null; then
-        echo -e "${YELLOW}     Docker command found, but Python module missing${NC}"
-        read -p "     Install docker Python module? [Y/n]: " -n 1 -r
-        echo
-        if [[ ! $REPLY =~ ^[Nn]$ ]]; then
-        if install_package "docker" "docker"; then
+# Check Docker (optional, for honeypot)
+DOCKER_AVAILABLE=false
+DOCKER_RUNNING=false
+if command -v docker &> /dev/null; then
+    # Check if Docker daemon is running
+    if docker info > /dev/null 2>&1; then
+        DOCKER_RUNNING=true
+        if $PYTHON_CMD -c "import docker" 2>/dev/null; then
             DOCKER_AVAILABLE=true
-            echo -e "${GREEN}  ✅ Docker${NC}"
+            echo -e "${GREEN}  ✅ Docker (honeypot support enabled)${NC}"
         else
-            echo -e "${YELLOW}  ⚠️  Docker Python module installation failed${NC}"
-        fi
+            echo -e "${YELLOW}  ⚠️  Docker command found, but Python module missing${NC}"
+            read -p "     Install docker Python module? [Y/n]: " -n 1 -r
+            echo
+            if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+                if install_package "docker" "docker"; then
+                    DOCKER_AVAILABLE=true
+                    echo -e "${GREEN}  ✅ Docker${NC}"
+                else
+                    echo -e "${YELLOW}  ⚠️  Docker Python module installation failed${NC}"
+                fi
+            fi
         fi
     else
-        echo -e "${YELLOW}     Docker not installed. Install with: sudo apt-get install docker.io${NC}"
-        echo -e "${YELLOW}     Or visit: https://docs.docker.com/get-docker/${NC}"
+        echo -e "${YELLOW}  ⚠️  Docker installed but daemon not running${NC}"
+        echo -e "${YELLOW}     Start Docker with: sudo systemctl start docker${NC}"
+        echo -e "${YELLOW}     Honeypot features will be unavailable${NC}"
     fi
+else
+    echo -e "${YELLOW}  ⚠️  Docker not found (optional, for honeypot)${NC}"
+    echo -e "${YELLOW}     Install with: sudo apt-get install docker.io${NC}"
+    echo -e "${YELLOW}     Or visit: https://docs.docker.com/get-docker/${NC}"
+    echo -e "${YELLOW}     Honeypot features will be unavailable${NC}"
 fi
 
 # Create necessary directories
 echo ""
 echo -e "${BLUE}📁 Setting up directories...${NC}"
-mkdir -p certs honeypot_data logs
+mkdir -p certs honeypot_data logs data/models
 
 # Fix permissions if running as root
 if [ "$EUID" -eq 0 ] && [ ! -z "$SUDO_USER" ]; then
-    chown -R $SUDO_USER:$SUDO_USER certs honeypot_data logs 2>/dev/null || true
+    chown -R $SUDO_USER:$SUDO_USER certs honeypot_data logs data 2>/dev/null || true
+fi
+
+# Check database file permissions
+if [ -f "identity.db" ]; then
+    if [ ! -w "identity.db" ]; then
+        echo -e "${YELLOW}⚠️  Database file identity.db is not writable${NC}"
+        echo -e "${YELLOW}   File is owned by: $(stat -c '%U:%G' identity.db 2>/dev/null || echo 'unknown')${NC}"
+        echo -e "${YELLOW}   The system will automatically use an alternative database location${NC}"
+        echo -e "${YELLOW}   To fix permissions, run:${NC}"
+        echo -e "${YELLOW}     sudo chown $USER:$USER identity.db${NC}"
+        echo -e "${YELLOW}     chmod 664 identity.db${NC}"
+    fi
 fi
 
 echo -e "${GREEN}✅ Directories ready${NC}"
+
+# Check for ML model
+if [ -d "data/models/ddos_model_retrained" ] || [ -f "data/models/ddos_model_retrained.keras" ]; then
+    echo -e "${GREEN}✅ ML model found${NC}"
+else
+    echo -e "${YELLOW}⚠️  ML model not found at data/models/ddos_model_retrained${NC}"
+    echo -e "${YELLOW}   System will use fallback heuristic detection${NC}"
+fi
 
 # Start Flask Controller
 echo ""
@@ -458,9 +516,9 @@ if [ "$RYU_AVAILABLE" = true ]; then
     # Set PYTHONPATH to include project root for imports
     export PYTHONPATH="${PYTHONPATH}:$(pwd)"
     
-        if command -v ryu-manager &> /dev/null; then
-            ryu-manager --ofp-tcp-listen-port 6653 --verbose ryu_controller.sdn_policy_engine > logs/ryu.log 2>&1 &
-            RYU_PID=$!
+    if command -v ryu-manager &> /dev/null; then
+        ryu-manager --ofp-tcp-listen-port 6653 --verbose ryu_controller.sdn_policy_engine > logs/ryu.log 2>&1 &
+        RYU_PID=$!
     else
         $PYTHON_CMD -m ryu.app.simple_switch_13 ryu_controller.sdn_policy_engine > logs/ryu.log 2>&1 &
         RYU_PID=$!
@@ -530,13 +588,18 @@ if [ -f "zero_trust_integration.py" ]; then
         echo -e "${YELLOW}   Zero Trust Framework requires Ryu to be running${NC}"
     elif [ "$CRYPTOGRAPHY_AVAILABLE" = true ]; then
         # Wait a moment to ensure Ryu is fully ready
-        sleep 1
+        sleep 2
         $PYTHON_CMD zero_trust_integration.py > logs/zero_trust.log 2>&1 &
         ZERO_TRUST_PID=$!
-        sleep 2
+        sleep 3
         # Check if it's still running
         if kill -0 $ZERO_TRUST_PID 2>/dev/null; then
             echo -e "${GREEN}✅ Zero Trust Framework started (PID: $ZERO_TRUST_PID)${NC}"
+            echo -e "${BLUE}   Features enabled:${NC}"
+            echo -e "${BLUE}     • Suspicious device detection (ML + Anomaly + Trust Score)${NC}"
+            echo -e "${BLUE}     • Automatic traffic redirection to honeypot${NC}"
+            echo -e "${BLUE}     • Honeypot log monitoring & threat intelligence${NC}"
+            echo -e "${BLUE}     • Dashboard alerts for suspicious devices${NC}"
         else
             echo -e "${RED}❌ Zero Trust Framework failed to start${NC}"
             echo -e "${YELLOW}   Check logs/zero_trust.log for errors:${NC}"
@@ -549,6 +612,21 @@ if [ -f "zero_trust_integration.py" ]; then
     fi
 else
     echo -e "${YELLOW}⚠️  Zero Trust integration file not found, skipping${NC}"
+fi
+
+# Check honeypot status (managed by Zero Trust Framework)
+if [ "$DOCKER_AVAILABLE" = true ] && [ "$DOCKER_RUNNING" = true ]; then
+    echo ""
+    echo -e "${BLUE}🍯 Checking Honeypot Status...${NC}"
+    sleep 2  # Give Zero Trust Framework time to deploy honeypot
+    
+    if docker ps --format "{{.Names}}" 2>/dev/null | grep -q "iot_honeypot"; then
+        HONEYPOT_CONTAINER=$(docker ps --format "{{.Names}}" 2>/dev/null | grep "iot_honeypot" | head -1)
+        echo -e "${GREEN}✅ Honeypot container running: $HONEYPOT_CONTAINER${NC}"
+    else
+        echo -e "${YELLOW}⚠️  Honeypot container not yet deployed${NC}"
+        echo -e "${YELLOW}   Zero Trust Framework will deploy it automatically when needed${NC}"
+    fi
 fi
 
 # Start Mininet Topology (optional, for testing)
@@ -582,6 +660,15 @@ if [ ! -z "$ZERO_TRUST_PID" ]; then
 else
     echo -e "   ${YELLOW}⚠️${NC}  Zero Trust Framework:  Not running"
 fi
+if [ "$DOCKER_AVAILABLE" = true ] && [ "$DOCKER_RUNNING" = true ]; then
+    if [ ! -z "$HONEYPOT_CONTAINER" ]; then
+        echo -e "   ${GREEN}✅${NC} Honeypot:              Running ($HONEYPOT_CONTAINER)"
+    else
+        echo -e "   ${YELLOW}⚠️${NC}  Honeypot:              Available (will deploy on demand)"
+    fi
+else
+    echo -e "   ${YELLOW}⚠️${NC}  Honeypot:              Not available (Docker required)"
+fi
 if [ ! -z "$MININET_PID" ]; then
     echo -e "   ${GREEN}✅${NC} Virtual Devices:      Running (PID: $MININET_PID)"
 fi
@@ -590,9 +677,19 @@ echo ""
 echo -e "${BLUE}🌐 Access Points:${NC}"
 echo -e "   • Web Dashboard:    ${GREEN}http://localhost:5000${NC}"
 echo -e "   • API Endpoints:     ${GREEN}http://localhost:5000/api/*${NC}"
+echo -e "   • Security Alerts:   ${GREEN}http://localhost:5000/api/alerts/suspicious_devices${NC}"
+echo -e "   • Honeypot Status:   ${GREEN}http://localhost:5000/api/honeypot/redirected_devices${NC}"
 if [ ! -z "$RYU_PID" ]; then
     echo -e "   • SDN Controller:   ${GREEN}Port 6653 (OpenFlow)${NC}"
 fi
+
+echo ""
+echo -e "${BLUE}🔒 Security Features:${NC}"
+echo -e "   • ML-Based DDoS Detection:     ${GREEN}Enabled${NC}"
+echo -e "   • Suspicious Device Detection:  ${GREEN}Enabled${NC}"
+echo -e "   • Honeypot Redirection:         ${GREEN}Enabled${NC}"
+echo -e "   • Dashboard Alerts:             ${GREEN}Enabled${NC}"
+echo -e "   • Threat Intelligence:         ${GREEN}Enabled${NC}"
 
 echo ""
 echo -e "${BLUE}📝 Log Files:${NC}"
@@ -605,6 +702,9 @@ if [ ! -z "$ZERO_TRUST_PID" ]; then
 fi
 if [ ! -z "$MININET_PID" ]; then
     echo -e "   • Virtual Devices:   ${YELLOW}logs/mininet.log${NC}"
+fi
+if [ "$DOCKER_AVAILABLE" = true ]; then
+    echo -e "   • Honeypot Logs:     ${YELLOW}honeypot_data/cowrie/logs/${NC}"
 fi
 
 echo ""
@@ -668,7 +768,7 @@ while true; do
             # Try to restart Ryu
             export PYTHONPATH="${PYTHONPATH}:$(pwd)"
             if command -v ryu-manager &> /dev/null; then
-                ryu-manager ryu_controller.sdn_policy_engine >> logs/ryu.log 2>&1 &
+                ryu-manager --ofp-tcp-listen-port 6653 --verbose ryu_controller.sdn_policy_engine >> logs/ryu.log 2>&1 &
                 RYU_PID=$!
                 sleep 3
                 if kill -0 $RYU_PID 2>/dev/null; then
@@ -679,7 +779,6 @@ while true; do
                 fi
             fi
         fi
-        RYU_PID=""
     fi
     
     # Check Zero Trust if it was started (only report once)
@@ -704,5 +803,21 @@ while true; do
             MININET_STOPPED_REPORTED="true"
         fi
         MININET_PID=""
+    fi
+    
+    # Check honeypot container status (if Docker is available)
+    if [ "$DOCKER_AVAILABLE" = true ] && [ "$DOCKER_RUNNING" = true ]; then
+        if [ ! -z "$HONEYPOT_CONTAINER" ]; then
+            if ! docker ps --format "{{.Names}}" 2>/dev/null | grep -q "$HONEYPOT_CONTAINER"; then
+                # Container stopped, update status
+                HONEYPOT_CONTAINER=""
+            fi
+        else
+            # Check if honeypot was deployed
+            NEW_CONTAINER=$(docker ps --format "{{.Names}}" 2>/dev/null | grep "iot_honeypot" | head -1)
+            if [ ! -z "$NEW_CONTAINER" ]; then
+                HONEYPOT_CONTAINER="$NEW_CONTAINER"
+            fi
+        fi
     fi
 done

@@ -21,7 +21,43 @@ class IdentityDatabase:
             db_path: Path to SQLite database file
         """
         self.db_path = db_path
+        # Check if we can write to the database file/directory
+        self._check_database_permissions()
         self._init_database()
+    
+    def _check_database_permissions(self):
+        """Check if database file/directory is writable, create alternative path if needed"""
+        import os
+        
+        # If database file exists, check if it's writable
+        if os.path.exists(self.db_path):
+            if not os.access(self.db_path, os.W_OK):
+                # File exists but is not writable - use a user-writable location
+                logger.warning(f"Database file {self.db_path} is not writable (may be owned by root)")
+                logger.warning("Using alternative database location in current directory")
+                
+                # Use a database in the current working directory with a different name
+                base_name = os.path.basename(self.db_path)
+                name, ext = os.path.splitext(base_name)
+                alt_path = os.path.join(os.getcwd(), f"{name}_user{ext}")
+                
+                # If that path also exists and is not writable, use temp directory
+                if os.path.exists(alt_path) and not os.access(alt_path, os.W_OK):
+                    import tempfile
+                    alt_path = os.path.join(tempfile.gettempdir(), f"iot_{base_name}")
+                    logger.warning(f"Using temporary database location: {alt_path}")
+                
+                self.db_path = alt_path
+                logger.info(f"Database will be created/used at: {self.db_path}")
+        else:
+            # File doesn't exist, check if directory is writable
+            db_dir = os.path.dirname(self.db_path) or '.'
+            if not os.access(db_dir, os.W_OK):
+                # Directory not writable, use current directory
+                logger.warning(f"Database directory {db_dir} is not writable")
+                alt_path = os.path.join(os.getcwd(), os.path.basename(self.db_path))
+                logger.info(f"Using database in current directory: {alt_path}")
+                self.db_path = alt_path
     
     def _init_database(self):
         """Initialize database schema"""
@@ -96,6 +132,29 @@ class IdentityDatabase:
             
             logger.info(f"Identity database initialized: {self.db_path}")
             
+        except sqlite3.OperationalError as e:
+            if "readonly" in str(e).lower() or "permission" in str(e).lower():
+                logger.error(f"Database permission error: {e}")
+                logger.error(f"Database file: {self.db_path}")
+                logger.error("Please fix database file permissions:")
+                logger.error(f"  sudo chown $USER:$USER {self.db_path}")
+                logger.error(f"  chmod 664 {self.db_path}")
+                # Try to use an alternative location
+                import os
+                import tempfile
+                alt_path = os.path.join(tempfile.gettempdir(), f"iot_{os.path.basename(self.db_path)}")
+                logger.warning(f"Attempting to use alternative database location: {alt_path}")
+                self.db_path = alt_path
+                # Retry initialization with new path
+                try:
+                    self._init_database()
+                    return
+                except Exception as retry_e:
+                    logger.error(f"Failed to initialize database at alternative location: {retry_e}")
+                    raise
+            else:
+                logger.error(f"Database operational error: {e}")
+                raise
         except Exception as e:
             logger.error(f"Failed to initialize database: {e}")
             raise
