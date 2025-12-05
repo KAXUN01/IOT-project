@@ -20,7 +20,7 @@ from identity_manager.device_onboarding import DeviceOnboarding
 from trust_evaluator.trust_scorer import TrustScorer
 from trust_evaluator.device_attestation import DeviceAttestation
 from trust_evaluator.policy_adapter import PolicyAdapter
-from heuristic_analyst.flow_analyzer import FlowAnalyzer
+from heuristic_analyst.flow_analyzer import FlowAnalyzer, FlowAnalyzerManager
 from heuristic_analyst.anomaly_detector import AnomalyDetector
 from heuristic_analyst.baseline_manager import BaselineManager
 from ryu_controller.traffic_orchestrator import TrafficOrchestrator
@@ -71,6 +71,10 @@ class ZeroTrustFramework:
             identity_db=self.onboarding.identity_db
         )
         self.anomaly_detector = AnomalyDetector()
+        self.flow_analyzer_manager = FlowAnalyzerManager(
+            identity_module=self.onboarding,
+            polling_interval=self.config.get('flow_polling_interval', 10)
+        )
         
         # Honeypot Management
         self.honeypot_deployer = HoneypotDeployer(
@@ -122,6 +126,15 @@ class ZeroTrustFramework:
         self.traffic_orchestrator.set_trust_module(self.trust_scorer)
         self.traffic_orchestrator.set_analyst_module(self.anomaly_detector)
         
+        # Connect flow analyzer manager to SDN policy engine
+        sdn_policy_engine.set_flow_analyzer_manager(self.flow_analyzer_manager)
+        
+        # Set up flow analyzer manager with existing switches
+        if hasattr(sdn_policy_engine, 'switch_datapaths'):
+            for dpid, datapath in sdn_policy_engine.switch_datapaths.items():
+                self.flow_analyzer_manager.add_switch(dpid, datapath)
+            logger.info(f"Added {len(sdn_policy_engine.switch_datapaths)} switches to FlowAnalyzerManager")
+        
         logger.info("SDN policy engine connected")
     
     def start(self):
@@ -133,6 +146,11 @@ class ZeroTrustFramework:
         # Deploy honeypot
         logger.info("Deploying honeypot...")
         self.honeypot_deployer.deploy()
+        
+        # Start flow statistics polling
+        if self.sdn_policy_engine:
+            logger.info("Starting flow statistics polling...")
+            self.flow_analyzer_manager.start_polling()
         
         # Start background monitoring threads
         self._start_monitoring_threads()
@@ -148,6 +166,9 @@ class ZeroTrustFramework:
         # Stop all threads
         for thread in self.threads:
             thread.join(timeout=5)
+        
+        # Stop flow statistics polling
+        self.flow_analyzer_manager.stop_polling()
         
         # Stop honeypot
         self.honeypot_deployer.stop()
@@ -212,7 +233,85 @@ class ZeroTrustFramework:
                 
                 time.sleep(60)  # Check every minute
         
-        # Thread 4: Analyst monitoring - poll flow stats and detect anomalies
+        # Thread 4: Flow statistics polling and real-time anomaly detection
+        def poll_flow_statistics():
+            """Poll flow statistics and detect anomalies in real-time"""
+            while self.running:
+                try:
+                    if not self.sdn_policy_engine or not self.flow_analyzer_manager:
+                        time.sleep(10)
+                        continue
+                    
+                    # Get flow statistics for all devices from all switches
+                    all_stats = self.flow_analyzer_manager.get_all_device_stats(window_seconds=60)
+                    
+                    if not all_stats:
+                        time.sleep(10)
+                        continue
+                    
+                    # Get all devices from identity database
+                    devices = self.onboarding.identity_db.get_all_devices()
+                    device_ids = {device['device_id'] for device in devices}
+                    
+                    # Process statistics for each device
+                    for device_id, stats in all_stats.items():
+                        # Skip if device not in identity database (might be MAC address)
+                        if device_id not in device_ids:
+                            # Try to find device by MAC address
+                            if self.onboarding:
+                                mapped_id = None
+                                try:
+                                    # Check if device_id is a MAC address
+                                    if ':' in device_id and len(device_id) == 17:
+                                        mapped_id = self.onboarding.get_device_id_from_mac(device_id)
+                                except:
+                                    pass
+                                
+                                if mapped_id:
+                                    device_id = mapped_id
+                                else:
+                                    continue  # Skip unknown devices
+                            else:
+                                continue
+                        
+                        # Load baseline for device if not already set
+                        baseline = self.baseline_manager.get_baseline(device_id)
+                        if baseline:
+                            self.anomaly_detector.set_baseline(device_id, baseline)
+                        
+                        # Compare current stats against baseline
+                        anomaly_result = self.anomaly_detector.detect_anomalies(device_id, stats)
+                        
+                        # If anomaly detected, trigger alert
+                        if anomaly_result.get('is_anomaly'):
+                            alert_type = anomaly_result.get('anomaly_type', 'anomaly')
+                            severity = anomaly_result.get('severity', 'low')
+                            
+                            logger.warning(
+                                f"Anomaly detected via flow statistics: {device_id} - "
+                                f"{alert_type} (severity: {severity})"
+                            )
+                            
+                            # Handle alert through framework
+                            self.handle_analyst_alert(device_id, alert_type, severity)
+                            
+                            # Use traffic orchestrator for intelligent policy decision
+                            if self.traffic_orchestrator:
+                                threat_intel = {
+                                    'severity': severity,
+                                    'alert_type': alert_type,
+                                    'indicators': anomaly_result.get('indicators', [])
+                                }
+                                self.traffic_orchestrator.orchestrate_policy(
+                                    device_id, threat_intelligence=threat_intel
+                                )
+                
+                except Exception as e:
+                    logger.error(f"Error polling flow statistics: {e}")
+                
+                time.sleep(10)  # Poll every 10 seconds
+        
+        # Thread 5: Analyst monitoring - process existing alerts
         def monitor_analyst_alerts():
             processed_alerts = set()  # Track processed alerts to avoid duplicates
             
@@ -227,11 +326,6 @@ class ZeroTrustFramework:
                     
                     for device in devices:
                         device_id = device['device_id']
-                        
-                        # Load baseline for device if not already set
-                        baseline = self.baseline_manager.get_baseline(device_id)
-                        if baseline:
-                            self.anomaly_detector.set_baseline(device_id, baseline)
                         
                         # Get recent alerts for this device
                         recent_alerts = self.anomaly_detector.get_recent_alerts(limit=100)
@@ -285,6 +379,7 @@ class ZeroTrustFramework:
             threading.Thread(target=monitor_honeypot_logs, daemon=True, name="HoneypotMonitor"),
             threading.Thread(target=perform_attestations, daemon=True, name="Attestation"),
             threading.Thread(target=adapt_policies, daemon=True, name="PolicyAdapter"),
+            threading.Thread(target=poll_flow_statistics, daemon=True, name="FlowStatisticsPoller"),
             threading.Thread(target=monitor_analyst_alerts, daemon=True, name="AnalystMonitor")
         ]
         

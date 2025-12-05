@@ -59,6 +59,7 @@ if RYU_AVAILABLE:
             self.identity_module = None
             self.analyst_module = None
             self.trust_module = None
+            self.flow_analyzer_manager = None  # Flow analyzer manager for flow stats
             
             # Honeypot port (default)
             self.honeypot_port = 3
@@ -85,6 +86,11 @@ if RYU_AVAILABLE:
             """Set reference to device onboarding module for traffic recording"""
             self.onboarding_module = onboarding_module
             logger.info("Onboarding module connected for traffic recording")
+        
+        def set_flow_analyzer_manager(self, flow_analyzer_manager):
+            """Set reference to flow analyzer manager for flow statistics"""
+            self.flow_analyzer_manager = flow_analyzer_manager
+            logger.info("Flow analyzer manager connected")
         
         @set_ev_cls(ofp_event.EventOFPSwitchFeatures, CONFIG_DISPATCHER)
         def switch_features_handler(self, ev):
@@ -120,6 +126,20 @@ if RYU_AVAILABLE:
             datapath.send_msg(mod)
             
             logger.info(f"Default rule installed on switch {dpid}")
+            
+            # Notify flow analyzer manager of new switch
+            if self.flow_analyzer_manager:
+                self.flow_analyzer_manager.add_switch(dpid, datapath)
+        
+        @set_ev_cls(ofp_event.EventOFPFlowStatsReply, MAIN_DISPATCHER)
+        def flow_stats_reply_handler(self, ev):
+            """
+            Handle flow statistics reply from switch
+            Forward to flow analyzer manager if available
+            """
+            if self.flow_analyzer_manager:
+                dpid = ev.msg.datapath.id
+                self.flow_analyzer_manager.handle_flow_stats_reply(dpid, ev)
         
         @set_ev_cls(ofp_event.EventOFPPacketIn, MAIN_DISPATCHER)
         def packet_in_handler(self, ev):
@@ -540,6 +560,11 @@ else:
             """Set reference to device onboarding module for traffic recording"""
             self.onboarding_module = onboarding_module
             logger.info("Onboarding module connected for traffic recording")
+        
+        def set_flow_analyzer_manager(self, flow_analyzer_manager):
+            """Set reference to flow analyzer manager for flow statistics (stub for testing)"""
+            self.flow_analyzer_manager = flow_analyzer_manager
+            logger.info("Flow analyzer manager connected (stub)")
         
         def apply_policy(self, device_id, action, match_fields=None, priority=100):
             """Apply a policy to a device (stub for testing)"""

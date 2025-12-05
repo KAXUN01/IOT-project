@@ -23,6 +23,15 @@
 - **Traffic Redirection**: Suspicious traffic is transparently redirected to honeypot for analysis
 - **Mitigation Actions**: Automatic mitigation rules generated from threat intelligence
 
+### Heuristic-Based Anomaly Detection with Honeypot Integration
+- **Periodic Flow Statistics Polling**: Continuously polls flow statistics from network switches using Ryu (every 10 seconds)
+- **Real-Time Anomaly Detection**: Compares real-time traffic metrics against normal baseline profiles to detect DoS attacks, network scans, and volume attacks
+- **Automatic Alert Generation**: Sends alerts to Policy Engine when anomalies are detected (DoS, scanning, port scanning)
+- **Traffic Redirection to Honeypot**: Automatically redirects suspicious traffic to containerized honeypots for threat intelligence gathering
+- **Threat Intelligence Extraction**: Parses honeypot logs to extract actionable intelligence (attacker IPs, commands used, attack patterns)
+- **Permanent Mitigation Rules**: Generates and applies confirmed mitigation rules to Policy Engine for permanent threat blocking
+- **Integrated Feedback Loop**: Tight integration between lightweight anomaly detection and active deception environment creates adaptive defense system
+
 ### Raspberry Pi Deployment
 - **Automated Setup Script**: One-command setup for Raspberry Pi deployment
 - **Systemd Services**: Production-ready service configuration for SDN controller and framework
@@ -87,7 +96,11 @@ graph TB
 - 📊 **SDN Policy Enforcement**: Dynamic policies including packet inspection, traffic shaping, and routing
 - 🗺️ **Network Topology Visualization**: Interactive topology graph using vis-network.js
 - 📈 **Live Metrics Dashboard**: Real-time packet counts, device status, and health metrics
-- 🎯 **Anomaly Detection**: Automatic blocking during maintenance windows
+- 🎯 **Anomaly Detection**: Heuristic-based anomaly detection with real-time flow statistics analysis
+- 🔄 **Heuristic-Deception Feedback Loop**: Integrated system where anomaly detection triggers honeypot redirection, which generates threat intelligence for permanent mitigation
+- 🐝 **Containerized Honeypots**: Docker-based lightweight honeypots (Cowrie) for emulating vulnerable IoT services
+- 📊 **Flow Statistics Analysis**: Periodic polling of network switch flow statistics for baseline comparison
+- 🚨 **Real-Time Threat Intelligence**: Automatic extraction of attacker IPs, commands, and attack patterns from honeypot logs
 - 📝 **Policy Audit Logs**: Comprehensive logging of all policy changes and enforcement actions
 - 🌐 **Gateway Architecture**: ESP32 dual-mode gateway (AP + STA) for flexible deployment
 - 🔍 **MAC Address Tracking**: Device identification and tracking via MAC addresses
@@ -385,6 +398,7 @@ See `docs/deployment_guide.md` for detailed instructions.
 
 - **Architecture**: `docs/ARCHITECTURE.md` - Complete system architecture
 - **Implementation Features**: `docs/IMPLEMENTATION_FEATURES.md` - New features documentation
+- **Heuristic-Deception System**: `docs/HEURISTIC_DECEPTION.md` - Complete guide on anomaly detection and honeypot integration
 - **Deployment Guide**: `docs/deployment_guide.md` - Raspberry Pi deployment
 - **Real-World Deployment**: `docs/REAL_WORLD_DEPLOYMENT.md` - Hardware setup guide
 
@@ -397,6 +411,9 @@ This project demonstrates:
 - Software-Defined Networking (SDN) concepts
 - Token-based authentication mechanisms
 - Real-time monitoring and control systems
+- Heuristic-based anomaly detection with flow statistics analysis
+- Honeypot integration for threat intelligence gathering
+- Adaptive defense systems with feedback loops
 - ESP32 microcontroller programming
 - Full-stack IoT application development
 

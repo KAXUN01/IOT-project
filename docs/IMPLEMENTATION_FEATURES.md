@@ -353,6 +353,151 @@ The Traffic Orchestrator is integrated into the Zero Trust Framework and used fo
                              └──→ Dynamic Enforcement
 ```
 
+## 8. Heuristic-Based Anomaly Detection with Honeypot Integration
+
+### Implementation
+
+**Files**:
+- `heuristic_analyst/flow_analyzer.py` - Flow statistics polling and analysis
+- `heuristic_analyst/anomaly_detector.py` - Heuristic anomaly detection
+- `heuristic_analyst/baseline_manager.py` - Baseline management
+- `honeypot_manager/` - Honeypot deployment and log parsing
+- `zero_trust_integration.py` - Complete integration
+
+### Features
+
+#### 8.1 Periodic Flow Statistics Polling
+
+**Implementation**: `FlowAnalyzerManager` in `zero_trust_integration.py`
+
+- **Polling Interval**: 10 seconds (configurable)
+- **Multi-Switch Support**: Manages FlowAnalyzers for multiple switches
+- **Automatic Switch Detection**: Adds new switches when they connect
+- **Flow Stats Collection**: Collects packet counts, byte counts, destinations, ports
+
+**Process**:
+1. FlowAnalyzerManager creates FlowAnalyzer for each switch
+2. Each FlowAnalyzer polls its switch every 10 seconds
+3. Flow statistics replies forwarded from SDN Policy Engine
+4. Statistics aggregated across all switches per device
+
+#### 8.2 Real-Time Anomaly Detection
+
+**Implementation**: `poll_flow_statistics()` thread in `zero_trust_integration.py`
+
+- **Baseline Comparison**: Compares current stats against device baselines
+- **Detection Types**:
+  - **DoS Attacks**: Packet rate > 10x baseline
+  - **Volume Attacks**: Byte rate > 10x baseline
+  - **Network Scanning**: Unique destinations > 5x baseline
+  - **Port Scanning**: Unique ports > 3x baseline
+- **Severity Levels**: Low, Medium, High (based on deviation from baseline)
+
+**Process**:
+1. Poll flow statistics every 10 seconds
+2. Get aggregated stats for all devices (60-second window)
+3. Load baseline for each device
+4. Compare current stats against baseline
+5. Trigger alert if anomaly detected
+
+#### 8.3 Alert Generation and Policy Engine Integration
+
+**Implementation**: `handle_analyst_alert()` in `zero_trust_integration.py`
+
+- **Alert Types**: 'dos', 'scanning', 'port_scanning', 'volume_attack', 'anomaly'
+- **Severity-Based Actions**:
+  - **High Severity**: Redirect to honeypot immediately
+  - **Medium Severity**: Redirect to honeypot, monitor
+  - **Low Severity**: Log and monitor
+- **Trust Score Impact**: Alerts reduce device trust scores
+
+#### 8.4 Traffic Redirection to Honeypot
+
+**Implementation**: `SDNPolicyEngine.handle_analyst_alert()`
+
+- **Automatic Redirection**: Suspicious traffic redirected to honeypot port
+- **Transparent Operation**: Device unaware of redirection
+- **OpenFlow Rules**: High-priority rules installed dynamically
+- **Honeypot Port**: Default port 3 (configurable)
+
+#### 8.5 Honeypot Log Parsing and Threat Intelligence
+
+**Implementation**: `HoneypotLogParser` and `ThreatIntelligence`
+
+- **Log Monitoring**: Monitors honeypot logs every 10 seconds
+- **Intelligence Extraction**:
+  - **Attacker IPs**: Source IP addresses
+  - **Commands Used**: Commands executed by attackers
+  - **Attack Patterns**: Event types (login attempts, file downloads, etc.)
+  - **Timestamps**: When attacks occurred
+- **Threat Severity Assessment**: High/Medium/Low based on event types
+
+#### 8.6 Mitigation Rule Generation and Application
+
+**Implementation**: `MitigationGenerator`
+
+- **Rule Types**:
+  - **DENY**: Block all traffic from confirmed malicious IPs
+  - **REDIRECT**: Continue monitoring (medium severity)
+  - **MONITOR**: Log only (low severity)
+- **Automatic Application**: Rules applied to SDN Policy Engine
+- **Permanent Mitigation**: High-confidence rules persist until manually removed
+
+#### 8.7 Complete Feedback Loop
+
+**Flow**:
+```
+Flow Statistics Polling (10s interval)
+    ↓
+Real-Time Anomaly Detection (compare against baseline)
+    ↓
+Alert Generation (DoS, scanning, etc.)
+    ↓
+Policy Engine Alert Handler (redirect to honeypot)
+    ↓
+Traffic Redirection (OpenFlow rules installed)
+    ↓
+Honeypot Capture (attacker interacts with honeypot)
+    ↓
+Log Parsing (extract threat intelligence)
+    ↓
+Threat Intelligence Analysis (IPs, commands, patterns)
+    ↓
+Mitigation Rule Generation (DENY/REDIRECT/MONITOR)
+    ↓
+Rule Application (permanent mitigation)
+    ↓
+Threat Blocked (future traffic denied)
+```
+
+**Innovation**: The tight integration creates an adaptive defense system where:
+1. Lightweight anomaly detection acts as a tripwire
+2. Honeypot captures high-fidelity threat intelligence
+3. Intelligence generates confirmed mitigation rules
+4. System becomes more effective over time
+
+### Configuration
+
+**File**: `zero_trust_integration.py`
+
+```python
+config = {
+    'flow_polling_interval': 10,  # Seconds between flow stat polls
+    'honeypot_type': 'cowrie',    # Honeypot type
+    'anomaly_window': 60          # Time window for anomaly detection
+}
+```
+
+### Integration Points
+
+1. **FlowAnalyzerManager** ↔ **SDNPolicyEngine**: Flow stats replies forwarded
+2. **AnomalyDetector** ↔ **BaselineManager**: Baseline comparison
+3. **AnomalyDetector** → **SDNPolicyEngine**: Alert triggering
+4. **SDNPolicyEngine** → **TrafficRedirector**: Honeypot redirection
+5. **Honeypot** → **ThreatIntelligence**: Log parsing
+6. **ThreatIntelligence** → **MitigationGenerator**: Rule generation
+7. **MitigationGenerator** → **SDNPolicyEngine**: Rule application
+
 ## Verification Checklist
 
 - ✅ SDN controller setup script for Raspberry Pi
@@ -365,6 +510,13 @@ The Traffic Orchestrator is integrated into the Zero Trust Framework and used fo
 - ✅ Mitigation action enforcement
 - ✅ Traffic orchestration engine
 - ✅ Multi-factor policy decisions
+- ✅ Periodic flow statistics polling from Ryu switches
+- ✅ Real-time anomaly detection with baseline comparison
+- ✅ Automatic alert generation and policy engine integration
+- ✅ Traffic redirection to containerized honeypots
+- ✅ Honeypot log parsing and threat intelligence extraction
+- ✅ Automatic mitigation rule generation and application
+- ✅ Complete heuristic-deception feedback loop
 
 ## Testing
 
@@ -386,6 +538,16 @@ To verify all features are working:
    ```python
    # Check policy decisions based on multiple factors
    # Verify appropriate actions taken
+   ```
+
+4. **Heuristic-Deception System**:
+   ```python
+   # Verify flow statistics polling active
+   # Generate test anomaly (high packet rate)
+   # Verify alert triggered and traffic redirected
+   # Check honeypot logs for captured traffic
+   # Verify threat intelligence extracted
+   # Verify mitigation rules generated and applied
    ```
 
 ## Logs

@@ -397,10 +397,17 @@ Final Score: Clamped to 0-100
 - `baseline_manager.py`: Baseline management
 
 **Responsibilities**:
-- Poll Ryu flow statistics
-- Compare against baselines
-- Detect anomalies using heuristics
-- Generate security alerts
+- Poll Ryu flow statistics periodically (every 10 seconds)
+- Compare real-time traffic metrics against baseline profiles
+- Detect anomalies using heuristics (DoS, scanning, volume attacks)
+- Generate security alerts and send to Policy Engine
+- Map MAC addresses to device IDs via Identity module
+
+**Components**:
+- `FlowAnalyzer`: Polls flow statistics from individual switches
+- `FlowAnalyzerManager`: Manages multiple FlowAnalyzers for multiple switches
+- `AnomalyDetector`: Compares current stats against baselines
+- `BaselineManager`: Manages behavioral baselines for devices
 
 **Detection Rules**:
 ```python
@@ -702,22 +709,49 @@ if data_transfer > 10 MB in 1 minute:
 └──────────┘
 ```
 
-### 3. Threat Detection and Mitigation Flow
+### 3. Heuristic-Deception Feedback Loop (Threat Detection and Mitigation)
+
+This flow demonstrates the complete integrated heuristic-deception system:
 
 ```
 ┌──────────┐
-│Suspicious│
-│ Traffic  │
+│  SDN     │
+│ Switches │
 └────┬─────┘
      │
+     │ 1. Flow statistics collected
+     │    (periodic polling every 10 seconds)
+     ↓
+┌──────────────────┐
+│ FlowAnalyzer     │
+│ Manager          │
+│ • Polls all      │
+│   switches       │
+│ • Aggregates     │
+│   statistics     │
+└────┬─────────────┘
+     │
+     │ 2. Get flow stats for all devices
+     │    (window: 60 seconds)
+     ↓
+┌──────────────────┐
+│ AnomalyDetector  │
+│ • Compare against│
+│   baseline       │
+│ • Detect DoS,    │
+│   scanning, etc. │
+└────┬─────────────┘
+     │
+     │ 3. Anomaly detected
+     │    (DoS, scanning, volume attack)
      ↓
 ┌──────────┐      ┌──────────┐
 │Heuristic │      │   ML     │
 │ Analyst  │ ←──→ │  Engine  │
 └────┬─────┘      └──────────┘
      │
-     │ 1. Detect anomaly
-     │    (via monitor_analyst_alerts thread)
+     │ 4. Alert generated
+     │    (via poll_flow_statistics thread)
      ↓
 ┌──────────┐
 │  Trust   │
@@ -746,12 +780,21 @@ if data_transfer > 10 MB in 1 minute:
 │ (Cowrie) │
 └────┬─────┘
      │ 5. Capture attack
+     │    (attacker interacts with honeypot)
      ↓
 ┌──────────┐
 │ Threat   │
 │Intel     │
+│          │
+│ • Parse  │
+│   logs   │
+│ • Extract│
+│   IPs    │
+│ • Extract│
+│   commands│
 └────┬─────┘
      │ 6. Extract IOCs
+     │    (via monitor_honeypot_logs thread)
      ↓
 ┌──────────┐
 │Mitigation│
@@ -771,12 +814,23 @@ if data_transfer > 10 MB in 1 minute:
 │ Adapter  │
 └────┬─────┘
      │ 9. Update device policies
+     │    (permanent mitigation rules)
      ↓
 ┌──────────┐
 │ Threat   │
 │ Blocked  │
+│          │
+│ • IP     │
+│   blocked│
+│ • Rules  │
+│   applied│
+│ • Future │
+│   traffic│
+│   denied │
 └──────────┘
 ```
+
+**Key Innovation**: The tight integration between lightweight anomaly detection (heuristic analysis) and active deception environment (honeypot). The heuristic analysis acts as a tripwire that triggers the honeypot to capture high-fidelity threat intelligence. This intelligence is then used to create confirmed, high-confidence mitigation rules, creating a more adaptive defense system than either component could achieve alone.
 
 ### 4. Policy Translation and Application Flow
 

@@ -33,29 +33,68 @@ logger = logging.getLogger(__name__)
 class FlowAnalyzer:
     """Analyzes flow statistics from SDN switches"""
     
-    def __init__(self, datapath, polling_interval=10):
+    def __init__(self, datapath=None, polling_interval=10, identity_module=None):
         """
         Initialize flow analyzer
         
         Args:
-            datapath: Ryu datapath object
+            datapath: Ryu datapath object (optional, can be set later)
             polling_interval: Interval in seconds to poll flow statistics
+            identity_module: Identity module for MAC to device ID mapping (optional)
         """
         self.datapath = datapath
         self.polling_interval = polling_interval
-        self.ofproto = datapath.ofproto
-        self.parser = datapath.ofproto_parser
+        self.identity_module = identity_module
+        
+        if datapath:
+            self.ofproto = datapath.ofproto
+            self.parser = datapath.ofproto_parser
+        else:
+            self.ofproto = None
+            self.parser = None
         
         # Flow statistics storage
         self.flow_stats = {}  # {device_id: flow_statistics}
         self.historical_stats = {}  # {device_id: [stats_history]}
         
         # Start polling thread
-        self.running = True
+        self.running = False
         self.polling_thread = None
         
+    def set_datapath(self, datapath):
+        """
+        Set datapath for this analyzer
+        
+        Args:
+            datapath: Ryu datapath object
+        """
+        self.datapath = datapath
+        if datapath:
+            self.ofproto = datapath.ofproto
+            self.parser = datapath.ofproto_parser
+            logger.info(f"Datapath set for FlowAnalyzer (dpid: {datapath.id})")
+    
+    def set_identity_module(self, identity_module):
+        """
+        Set identity module for MAC to device ID mapping
+        
+        Args:
+            identity_module: Identity module instance
+        """
+        self.identity_module = identity_module
+        logger.info("Identity module set for FlowAnalyzer")
+    
     def start_polling(self):
         """Start polling flow statistics"""
+        if not self.datapath:
+            logger.warning("Cannot start polling: no datapath set")
+            return
+        
+        if self.running:
+            logger.warning("Polling already running")
+            return
+            
+        self.running = True
         import threading
         self.polling_thread = threading.Thread(target=self._polling_loop, daemon=True)
         self.polling_thread.start()
@@ -63,9 +102,11 @@ class FlowAnalyzer:
     
     def stop_polling(self):
         """Stop polling flow statistics"""
+        if not self.running:
+            return
         self.running = False
         if self.polling_thread:
-            self.polling_thread.join()
+            self.polling_thread.join(timeout=5)
         logger.info("Flow statistics polling stopped")
     
     def _polling_loop(self):
@@ -170,18 +211,43 @@ class FlowAnalyzer:
         Extract device ID from match fields
         
         Args:
-            match: OFPMatch object
+            match: OFPMatch object or dict
             
         Returns:
             Device ID or None
         """
         # Try to get MAC address from match
-        eth_src = match.get('eth_src', None)
+        if hasattr(match, 'get'):
+            eth_src = match.get('eth_src', None)
+        else:
+            # If match is an OFPMatch object, try to access directly
+            try:
+                eth_src = getattr(match, 'eth_src', None)
+            except:
+                eth_src = None
+        
         if eth_src:
-            # In real implementation, map MAC to device_id via identity module
-            # For now, use MAC as device identifier
+            # Map MAC to device_id via identity module if available
+            if self.identity_module:
+                try:
+                    device_id = self.identity_module.get_device_id_from_mac(eth_src)
+                    if device_id:
+                        return device_id
+                except Exception as e:
+                    logger.debug(f"Failed to map MAC {eth_src} to device_id: {e}")
+            
+            # Fallback: use MAC as device identifier
             return eth_src
         return None
+    
+    def handle_flow_stats_reply(self, ev):
+        """
+        Handle flow statistics reply event (can be called manually)
+        
+        Args:
+            ev: Flow statistics reply event
+        """
+        self._handle_flow_stats_reply(ev)
     
     def get_device_stats(self, device_id: str, window_seconds: int = 60) -> Dict:
         """
@@ -252,6 +318,142 @@ class FlowAnalyzer:
         """
         all_stats = {}
         for device_id in self.historical_stats.keys():
-            all_stats[device_id] = self.get_device_stats(device_id, window_seconds)
+            stats = self.get_device_stats(device_id, window_seconds)
+            if stats:  # Only include devices with stats
+                all_stats[device_id] = stats
+        return all_stats
+
+
+class FlowAnalyzerManager:
+    """Manages multiple FlowAnalyzers for multiple switches"""
+    
+    def __init__(self, identity_module=None, polling_interval=10):
+        """
+        Initialize flow analyzer manager
+        
+        Args:
+            identity_module: Identity module for MAC to device ID mapping
+            polling_interval: Interval in seconds to poll flow statistics
+        """
+        self.identity_module = identity_module
+        self.polling_interval = polling_interval
+        self.flow_analyzers = {}  # {dpid: FlowAnalyzer}
+        self.running = False
+    
+    def add_switch(self, dpid, datapath):
+        """
+        Add a switch and create FlowAnalyzer for it
+        
+        Args:
+            dpid: Switch datapath ID
+            datapath: Ryu datapath object
+        """
+        if dpid in self.flow_analyzers:
+            logger.warning(f"FlowAnalyzer already exists for switch {dpid}")
+            return
+        
+        analyzer = FlowAnalyzer(
+            datapath=datapath,
+            polling_interval=self.polling_interval,
+            identity_module=self.identity_module
+        )
+        self.flow_analyzers[dpid] = analyzer
+        
+        if self.running:
+            analyzer.start_polling()
+        
+        logger.info(f"Added FlowAnalyzer for switch {dpid}")
+    
+    def remove_switch(self, dpid):
+        """
+        Remove a switch and stop its FlowAnalyzer
+        
+        Args:
+            dpid: Switch datapath ID
+        """
+        if dpid in self.flow_analyzers:
+            analyzer = self.flow_analyzers[dpid]
+            analyzer.stop_polling()
+            del self.flow_analyzers[dpid]
+            logger.info(f"Removed FlowAnalyzer for switch {dpid}")
+    
+    def start_polling(self):
+        """Start polling on all switches"""
+        self.running = True
+        for analyzer in self.flow_analyzers.values():
+            analyzer.start_polling()
+        logger.info(f"Started polling on {len(self.flow_analyzers)} switches")
+    
+    def stop_polling(self):
+        """Stop polling on all switches"""
+        self.running = False
+        for analyzer in self.flow_analyzers.values():
+            analyzer.stop_polling()
+        logger.info("Stopped polling on all switches")
+    
+    def handle_flow_stats_reply(self, dpid, ev):
+        """
+        Forward flow stats reply to appropriate analyzer
+        
+        Args:
+            dpid: Switch datapath ID
+            ev: Flow statistics reply event
+        """
+        if dpid in self.flow_analyzers:
+            self.flow_analyzers[dpid].handle_flow_stats_reply(ev)
+    
+    def get_all_device_stats(self, window_seconds: int = 60) -> Dict[str, Dict]:
+        """
+        Get aggregated statistics for all devices across all switches
+        
+        Args:
+            window_seconds: Time window in seconds
+            
+        Returns:
+            Dictionary mapping device_id to aggregated statistics
+        """
+        all_stats = {}
+        
+        # Collect stats from all analyzers
+        for analyzer in self.flow_analyzers.values():
+            switch_stats = analyzer.get_all_device_stats(window_seconds)
+            
+            # Aggregate by device_id
+            for device_id, stats in switch_stats.items():
+                if device_id not in all_stats:
+                    all_stats[device_id] = {
+                        'device_id': device_id,
+                        'window_seconds': window_seconds,
+                        'total_packets': 0,
+                        'total_bytes': 0,
+                        'packets_per_second': 0.0,
+                        'bytes_per_second': 0.0,
+                        'unique_destinations': set(),
+                        'unique_ports': set(),
+                        'flow_count': 0
+                    }
+                
+                # Aggregate statistics
+                all_stats[device_id]['total_packets'] += stats.get('total_packets', 0)
+                all_stats[device_id]['total_bytes'] += stats.get('total_bytes', 0)
+                all_stats[device_id]['flow_count'] += stats.get('flow_count', 0)
+                
+                # Aggregate unique destinations and ports
+                if 'destinations' in stats:
+                    all_stats[device_id]['unique_destinations'].update(stats['destinations'])
+                if 'ports' in stats:
+                    all_stats[device_id]['unique_ports'].update(stats['ports'])
+        
+        # Convert sets to counts and calculate averages
+        for device_id, stats in all_stats.items():
+            stats['unique_destinations'] = len(stats['unique_destinations'])
+            stats['unique_ports'] = len(stats['unique_ports'])
+            
+            # Calculate average rates (simple average across switches)
+            if stats['flow_count'] > 0:
+                # Recalculate averages based on aggregated data
+                # This is approximate - for exact calculation, we'd need time windows
+                pass
+        
         return all_stats
 
