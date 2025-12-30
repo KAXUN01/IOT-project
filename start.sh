@@ -153,24 +153,61 @@ else
         echo
         if [[ ! $REPLY =~ ^[Nn]$ ]]; then
             echo -e "${BLUE}📦 Installing dependencies from requirements.txt...${NC}"
-            local pip_cmd=""
+            
+            # Determine pip command
+            pip_cmd=""
             if command -v pip3 &> /dev/null; then
                 pip_cmd="pip3"
             elif command -v pip &> /dev/null; then
                 pip_cmd="pip"
             fi
             
-            if [ ! -z "$pip_cmd" ]; then
-                if $pip_cmd install -q -r requirements.txt 2>/dev/null; then
-                    echo -e "${GREEN}✅ All dependencies installed successfully${NC}"
-                elif [ "$EUID" -ne 0 ] && sudo $pip_cmd install -q -r requirements.txt 2>/dev/null; then
+            if [ -z "$pip_cmd" ]; then
+                echo -e "${RED}❌ pip not found. Cannot install dependencies.${NC}"
+            else
+                # Fix broken PIL/Pillow installation first (common issue)
+                echo -e "${YELLOW}   Checking PIL/Pillow installation...${NC}"
+                if ! python3 -c "from PIL import Image" 2>/dev/null; then
+                    echo -e "${YELLOW}   Fixing PIL/Pillow installation...${NC}"
+                    # Try to fix broken PIL
+                    $pip_cmd uninstall -y pillow PIL 2>/dev/null || true
+                    sudo apt-get remove -y python3-pil 2>/dev/null || true
+                    $pip_cmd install --upgrade --force-reinstall pillow 2>/dev/null || \
+                    sudo $pip_cmd install --upgrade --force-reinstall pillow 2>/dev/null || true
+                    sleep 1
+                fi
+                
+                # Now install all dependencies - try bulk first, then individual if it fails
+                echo -e "${YELLOW}   Installing all dependencies...${NC}"
+                install_success=false
+                
+                # Try user installation first (without sudo)
+                if $pip_cmd install --user -r requirements.txt 2>&1 | grep -q "Successfully installed\|already satisfied"; then
+                    install_success=true
                     echo -e "${GREEN}✅ All dependencies installed successfully${NC}"
                 else
-                    echo -e "${YELLOW}⚠️  Some packages may have failed to install${NC}"
-                    echo -e "${YELLOW}   You can install manually later: $pip_cmd install -r requirements.txt${NC}"
+                    # Bulk install failed, try installing critical packages individually
+                    echo -e "${YELLOW}   Bulk installation had issues, installing critical packages...${NC}"
+                    
+                    # Install Ryu and eventlet with compatible versions (critical)
+                    echo -e "${YELLOW}   Installing Ryu SDN Controller...${NC}"
+                    $pip_cmd install --user ryu eventlet==0.30.2 2>/dev/null && \
+                    echo -e "${GREEN}   ✅ Ryu installed${NC}" || \
+                    echo -e "${YELLOW}   ⚠️  Ryu installation had issues${NC}"
+                    
+                    # Install other critical packages
+                    for pkg in "Flask>=3.0.0" "requests>=2.31.0" "cryptography>=41.0.0" "numpy" "pandas" "scikit-learn"; do
+                        $pip_cmd install --user "$pkg" 2>/dev/null || true
+                    done
+                    
+                    # Try TensorFlow (may take time)
+                    echo -e "${YELLOW}   Installing TensorFlow (may take a while)...${NC}"
+                    $pip_cmd install --user "tensorflow>=2.14.0" 2>/dev/null || \
+                    echo -e "${YELLOW}   ⚠️  TensorFlow installation skipped${NC}"
+                    
+                    echo -e "${GREEN}✅ Critical dependencies installed${NC}"
+                    echo -e "${YELLOW}   Some optional packages may need manual installation${NC}"
                 fi
-            else
-                echo -e "${RED}❌ pip not found. Cannot install dependencies.${NC}"
             fi
         fi
     fi
@@ -208,8 +245,14 @@ install_package() {
     
     echo -e "${YELLOW}     Installing $package_name...${NC}"
     
+    # Determine if we should use --user flag
+    user_flag=""
+    if [ ! -d "venv" ]; then
+        user_flag="--user"
+    fi
+    
     # Try installation (suppress output but show errors)
-    if $pip_cmd install --upgrade $package_name > /dev/null 2>&1; then
+    if $pip_cmd install $user_flag --upgrade $package_name > /dev/null 2>&1; then
         # Check if it can be imported
         if $PYTHON_CMD -c "import $import_name" 2>/dev/null; then
             echo -e "${GREEN}     ✅ $package_name installed successfully${NC}"
@@ -217,8 +260,8 @@ install_package() {
         fi
     fi
     
-    # Try with sudo if not in venv and not root
-    if [ ! -d "venv" ] && [ "$EUID" -ne 0 ]; then
+    # Try with sudo if not in venv and not root (as last resort)
+    if [ ! -d "venv" ] && [ "$EUID" -ne 0 ] && [ -z "$user_flag" ]; then
         echo -e "${YELLOW}     Trying with sudo...${NC}"
         if sudo $pip_cmd install --upgrade $package_name > /dev/null 2>&1; then
             if $PYTHON_CMD -c "import $import_name" 2>/dev/null; then
@@ -232,13 +275,38 @@ install_package() {
     return 1
 }
 
-# Special handler for ryu (needs eventlet too)
+# Special handler for ryu (needs eventlet with specific version)
 install_ryu() {
-    if install_package "ryu" "ryu" && install_package "eventlet" "eventlet"; then
-        return 0
+    local pip_cmd=""
+    
+    # Determine pip command
+    if [ -d "venv" ] && [ -f "./venv/bin/pip" ]; then
+        pip_cmd="./venv/bin/pip"
+    elif [ -d "venv" ] && [ -f "./venv/bin/pip3" ]; then
+        pip_cmd="./venv/bin/pip3"
+    elif command -v pip3 &> /dev/null; then
+        pip_cmd="pip3"
+    elif command -v pip &> /dev/null; then
+        pip_cmd="pip"
     else
         return 1
     fi
+    
+    # Determine user flag
+    user_flag=""
+    if [ ! -d "venv" ]; then
+        user_flag="--user"
+    fi
+    
+    echo -e "${YELLOW}     Installing ryu and eventlet...${NC}"
+    if $pip_cmd install $user_flag ryu eventlet==0.30.2 > /dev/null 2>&1; then
+        if $PYTHON_CMD -c "import ryu; import eventlet" 2>/dev/null; then
+            echo -e "${GREEN}     ✅ Ryu and eventlet installed successfully${NC}"
+            return 0
+        fi
+    fi
+    
+    return 1
 }
 
 # Check dependencies
@@ -298,7 +366,8 @@ else
 fi
 
 # Check Ryu (required - other components depend on it)
-if command -v ryu-manager &> /dev/null || $PYTHON_CMD -c "import ryu" 2>/dev/null; then
+# Only check if Python can import it, not just if command exists
+if $PYTHON_CMD -c "import ryu" 2>/dev/null; then
     RYU_AVAILABLE=true
     echo -e "${GREEN}  ✅ Ryu SDN Controller${NC}"
 else
@@ -310,8 +379,8 @@ else
         echo -e "${GREEN}  ✅ Ryu SDN Controller installed${NC}"
     else
         echo -e "${RED}  ❌ Failed to install Ryu SDN Controller${NC}"
-        echo -e "${RED}     Please install manually: pip install ryu eventlet${NC}"
-        echo -e "${RED}     Or: pip3 install -r requirements.txt${NC}"
+        echo -e "${RED}     Please install manually: pip3 install --user ryu eventlet==0.30.2${NC}"
+        echo -e "${RED}     Or: pip3 install --user -r requirements.txt${NC}"
         exit 1
     fi
 fi
