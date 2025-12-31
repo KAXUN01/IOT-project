@@ -950,7 +950,7 @@
         }
 
         .search-box::before {
-            content: '🔍';
+            content: '';
             position: absolute;
             left: 1rem;
             top: 50%;
@@ -1039,7 +1039,7 @@
         <section id="overview" class="tab-content active">
             <div class="grid-container">
                 <div class="card">
-                    <h3>🌐 Network Status</h3>
+                    <h3>Network Status</h3>
                     <div class="metric-value" id="total-devices">0</div>
                     <div class="metric-label">Total Devices</div>
                     <div style="margin-top: 0.5rem; font-size: 0.875rem; color: var(--text-secondary);">
@@ -1047,7 +1047,7 @@
                     </div>
                 </div>
                 <div class="card">
-                    <h3>📊 Network Traffic</h3>
+                    <h3>Network Traffic</h3>
                     <div class="metric-value" id="overview-total-packets">0</div>
                     <div class="metric-label">Total Packets Processed</div>
                     <div style="margin-top: 0.5rem; font-size: 0.875rem; color: var(--text-secondary);">
@@ -1055,7 +1055,7 @@
                     </div>
                 </div>
                 <div class="card">
-                    <h3>⚠️ Attack Rate</h3>
+                    <h3>Attack Rate</h3>
                     <div class="metric-value" id="overview-attack-rate">0%</div>
                     <div class="metric-label">Threat Detection Rate</div>
                     <div style="margin-top: 0.5rem; font-size: 0.875rem; color: var(--text-secondary);">
@@ -1063,7 +1063,7 @@
                     </div>
                 </div>
                 <div class="card">
-                    <h3>💚 System Health</h3>
+                    <h3>System Health</h3>
                     <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 0.5rem;">
                         <div class="progress-bar" style="flex: 1;">
                             <div id="system-health" style="width: 0%"></div>
@@ -1076,7 +1076,7 @@
             </div>
             <div class="grid-container" style="margin-top: 1rem;">
                 <div class="card">
-                    <h3>🤖 ML Engine Status</h3>
+                    <h3>ML Engine Status</h3>
                     <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem;">
                         <span class="status-dot-large" id="overview-ml-status-dot"></span>
                         <span id="overview-ml-status-text" style="font-weight: 500;">Initializing...</span>
@@ -1086,7 +1086,7 @@
                             id="overview-detection-accuracy">--</span></div>
                 </div>
                 <div class="card">
-                    <h3>🔒 Security Alerts</h3>
+                    <h3>Security Alerts</h3>
                     <div class="metric-value" id="overview-alerts-count">0</div>
                     <div class="metric-label">Active Alerts</div>
                     <div style="margin-top: 0.5rem; font-size: 0.875rem;">
@@ -1095,7 +1095,7 @@
                     </div>
                 </div>
                 <div class="card">
-                    <h3>🍯 Honeypot Status</h3>
+                    <h3>Honeypot Status</h3>
                     <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem;">
                         <span class="status-dot" id="overview-honeypot-status-dot"></span>
                         <span id="overview-honeypot-status" style="font-weight: 500;">Stopped</span>
@@ -1106,7 +1106,7 @@
                 </div>
             </div>
             <div class="card" style="margin-top: 1rem;">
-                <h3>🗺️ Network Topology</h3>
+                <h3>Network Topology</h3>
                 <div class="network-topology" id="network-visualization"></div>
             </div>
         </section>
@@ -1115,24 +1115,24 @@
         <section id="devices" class="tab-content">
             <div class="grid-container">
                 <div class="card">
-                    <h3>📱 Device Statistics</h3>
+                    <h3>Device Statistics</h3>
                     <div class="stats-grid">
                         <div class="stat-item">
-                            <div class="stat-icon">🌐</div>
+                            <div class="stat-icon"></div>
                             <div class="stat-content">
                                 <div class="stat-value" id="devices-total-count">0</div>
                                 <div class="stat-label">Total Devices</div>
                             </div>
                         </div>
                         <div class="stat-item">
-                            <div class="stat-icon">✅</div>
+                            <div class="stat-icon"></div>
                             <div class="stat-content">
                                 <div class="stat-value" id="devices-online-count">0</div>
                                 <div class="stat-label">Online</div>
                             </div>
                         </div>
                         <div class="stat-item">
-                            <div class="stat-icon">📦</div>
+                            <div class="stat-icon"></div>
                             <div class="stat-content">
                                 <div class="stat-value" id="devices-total-packets">0</div>
                                 <div class="stat-label">Total Packets</div>
@@ -1142,7 +1142,7 @@
                 </div>
             </div>
             <div class="card">
-                <h3>🔌 Connected Devices</h3>
+                <h3>Connected Devices</h3>
                 <div class="scroll-container">
                     <table class="device-table">
                         <thead>
@@ -1196,7 +1196,7 @@
         <section id="security" class="tab-content">
             <div class="grid-container">
                 <div class="card">
-                    <h3>🛡️ Security Policies</h3>
+                    <h3>Security Policies</h3>
                     <div class="policy-toggle">
                         <div class="policy-info">
                             <span class="policy-name">Packet Inspection</span>
@@ -1232,7 +1232,7 @@
                     </div>
                 </div>
                 <div class="card">
-                    <h3>🚨 Security Alerts</h3>
+                    <h3>Security Alerts</h3>
                     <div id="security-alerts" class="scroll-container">
                         <div class="alert-filters">
                             <button class="filter-btn active" data-severity="all">All</button>
@@ -1245,7 +1245,7 @@
                 </div>
             </div>
             <div class="card">
-                <h3>📋 Policy Logs</h3>
+                <h3>Policy Logs</h3>
                 <div class="policy-logs-header">
                     <div class="search-box">
                         <input type="text" id="log-search" placeholder="Search logs...">
@@ -1263,7 +1263,7 @@
         <section id="ml-engine" class="tab-content">
             <!-- ML Engine Status Card -->
             <div class="card">
-                <h3>🤖 ML Security Engine</h3>
+                <h3>ML Security Engine</h3>
                 <div class="ml-status-container">
                     <div class="ml-status-main">
                         <div class="status-indicator-large">
@@ -1276,11 +1276,11 @@
                         </div>
                         <div class="ml-controls">
                             <button class="button button-primary" onclick="initializeML()" id="ml-init-btn">
-                                <span class="button-icon">🔄</span>Initialize ML Engine
+                                <span class="button-icon"></span>Initialize ML Engine
                             </button>
                             <button class="button button-primary" id="ml-monitoring-toggle"
                                 onclick="toggleMLMonitoring()">
-                                <span class="button-icon">⏸️</span>Pause Monitoring
+                                <span class="button-icon"></span>Pause Monitoring
                             </button>
                         </div>
                     </div>
@@ -1290,31 +1290,31 @@
             <!-- Statistics Grid -->
             <div class="grid-container">
                 <div class="card">
-                    <h3>📊 Network Statistics</h3>
+                    <h3>Network Statistics</h3>
                     <div class="stats-grid">
                         <div class="stat-item">
-                            <div class="stat-icon">📦</div>
+                            <div class="stat-icon"></div>
                             <div class="stat-content">
                                 <div class="stat-value" id="total-packets">0</div>
                                 <div class="stat-label">Total Packets</div>
                             </div>
                         </div>
                         <div class="stat-item">
-                            <div class="stat-icon">⚠️</div>
+                            <div class="stat-icon"></div>
                             <div class="stat-content">
                                 <div class="stat-value" id="attack-packets">0</div>
                                 <div class="stat-label">Attack Packets</div>
                             </div>
                         </div>
                         <div class="stat-item">
-                            <div class="stat-icon">📈</div>
+                            <div class="stat-icon"></div>
                             <div class="stat-content">
                                 <div class="stat-value" id="attack-rate">0%</div>
                                 <div class="stat-label">Attack Rate</div>
                             </div>
                         </div>
                         <div class="stat-item">
-                            <div class="stat-icon">🎯</div>
+                            <div class="stat-icon"></div>
                             <div class="stat-content">
                                 <div class="stat-value" id="model-confidence">0%</div>
                                 <div class="stat-label">Model Confidence</div>
@@ -1324,7 +1324,7 @@
                 </div>
 
                 <div class="card">
-                    <h3>⏱️ System Metrics</h3>
+                    <h3>System Metrics</h3>
                     <div class="metrics-container">
                         <div class="metric-row">
                             <span class="metric-label">Uptime:</span>
@@ -1348,7 +1348,7 @@
 
             <!-- Attack Detection Section -->
             <div class="card">
-                <h3>🚨 Real-time Attack Detection</h3>
+                <h3>Real-time Attack Detection</h3>
                 <div class="detection-header">
                     <div class="detection-filters">
                         <button class="filter-btn active" data-filter="all">All</button>
@@ -1371,23 +1371,23 @@
         <section id="trust" class="tab-content">
             <div class="grid-container">
                 <div class="card">
-                    <h3>⭐ Average Trust Score</h3>
+                    <h3>Average Trust Score</h3>
                     <div class="metric-value" id="avg-trust-score">0</div>
                     <div class="metric-label">Network Trust Level</div>
                 </div>
                 <div class="card">
-                    <h3>✅ Trusted Devices</h3>
+                    <h3>Trusted Devices</h3>
                     <div class="metric-value" id="trusted-devices-count">0</div>
                     <div class="metric-label">Score ≥ 70</div>
                 </div>
                 <div class="card">
-                    <h3>⚠️ Suspicious Devices</h3>
+                    <h3>Suspicious Devices</h3>
                     <div class="metric-value" id="suspicious-devices-count">0</div>
                     <div class="metric-label">Score < 50</div>
                     </div>
                 </div>
                 <div class="card">
-                    <h3>📊 Device Trust Scores</h3>
+                    <h3>Device Trust Scores</h3>
                     <div class="scroll-container">
                         <table class="device-table">
                             <thead>
@@ -1409,29 +1409,29 @@
         <section id="honeypot" class="tab-content">
             <div class="grid-container">
                 <div class="card">
-                    <h3>🍯 Honeypot Status</h3>
+                    <h3>Honeypot Status</h3>
                     <div class="metric-value" id="honeypot-status">Stopped</div>
                     <div class="metric-label" id="honeypot-status-label">Container Status</div>
                 </div>
                 <div class="card">
-                    <h3>🎯 Threats Captured</h3>
+                    <h3>Threats Captured</h3>
                     <div class="metric-value" id="threats-captured">0</div>
                     <div class="metric-label">Total Threats</div>
                 </div>
                 <div class="card">
-                    <h3>🚫 Blocked IPs</h3>
+                    <h3>Blocked IPs</h3>
                     <div class="metric-value" id="blocked-ips-count">0</div>
                     <div class="metric-label">Auto-Blocked</div>
                 </div>
             </div>
             <div class="card">
-                <h3>🔍 Recent Threats</h3>
+                <h3>Recent Threats</h3>
                 <div class="scroll-container">
                     <div id="recent-threats-list" class="alerts-list"></div>
                 </div>
             </div>
             <div class="card">
-                <h3>🛡️ Mitigation Rules</h3>
+                <h3>Mitigation Rules</h3>
                 <div class="scroll-container">
                     <table class="device-table">
                         <thead>
@@ -1452,31 +1452,31 @@
         <section id="certificates" class="tab-content">
             <div class="grid-container">
                 <div class="card">
-                    <h3>🔐 Certificate Overview</h3>
+                    <h3>Certificate Overview</h3>
                     <div class="stats-grid">
                         <div class="stat-item">
-                            <div class="stat-icon">📜</div>
+                            <div class="stat-icon"></div>
                             <div class="stat-content">
                                 <div class="stat-value" id="certificates-total">0</div>
                                 <div class="stat-label">Total Certificates</div>
                             </div>
                         </div>
                         <div class="stat-item">
-                            <div class="stat-icon">✅</div>
+                            <div class="stat-icon"></div>
                             <div class="stat-content">
                                 <div class="stat-value" id="certificates-valid">0</div>
                                 <div class="stat-label">Valid</div>
                             </div>
                         </div>
                         <div class="stat-item">
-                            <div class="stat-icon">⚠️</div>
+                            <div class="stat-icon"></div>
                             <div class="stat-content">
                                 <div class="stat-value" id="certificates-expiring">0</div>
                                 <div class="stat-label">Expiring Soon</div>
                             </div>
                         </div>
                         <div class="stat-item">
-                            <div class="stat-icon">❌</div>
+                            <div class="stat-icon"></div>
                             <div class="stat-content">
                                 <div class="stat-value" id="certificates-expired">0</div>
                                 <div class="stat-label">Expired</div>
@@ -1508,24 +1508,24 @@
         <section id="analytics" class="tab-content">
             <div class="grid-container">
                 <div class="card">
-                    <h3>📈 Network Performance</h3>
+                    <h3>Network Performance</h3>
                     <div class="stats-grid">
                         <div class="stat-item">
-                            <div class="stat-icon">📦</div>
+                            <div class="stat-icon"></div>
                             <div class="stat-content">
                                 <div class="stat-value" id="analytics-total-packets">0</div>
                                 <div class="stat-label">Total Packets</div>
                             </div>
                         </div>
                         <div class="stat-item">
-                            <div class="stat-icon">⚡</div>
+                            <div class="stat-icon"></div>
                             <div class="stat-content">
                                 <div class="stat-value" id="analytics-packets-per-min">0</div>
                                 <div class="stat-label">Packets/Min</div>
                             </div>
                         </div>
                         <div class="stat-item">
-                            <div class="stat-icon">🌐</div>
+                            <div class="stat-icon"></div>
                             <div class="stat-content">
                                 <div class="stat-value" id="analytics-online-devices">0</div>
                                 <div class="stat-label">Online Devices</div>
@@ -1534,7 +1534,7 @@
                     </div>
                 </div>
                 <div class="card">
-                    <h3>⚙️ System Metrics</h3>
+                    <h3>System Metrics</h3>
                     <div class="metrics-container">
                         <div class="metric-row">
                             <span class="metric-label">System Health:</span>
@@ -1556,7 +1556,7 @@
                 </div>
             </div>
             <div class="card">
-                <h3>📊 Traffic Analysis</h3>
+                <h3>Traffic Analysis</h3>
                 <div class="scroll-container">
                     <div id="traffic-analysis">
                         <div class="loading-indicator">Loading traffic analysis...</div>
@@ -1569,23 +1569,23 @@
         <section id="approval" class="tab-content">
             <div class="grid-container">
                 <div class="card">
-                    <h3>⏳ Pending Approvals</h3>
+                    <h3>Pending Approvals</h3>
                     <div class="metric-value" id="pending-count">0</div>
                     <div class="metric-label">Devices Awaiting Review</div>
                 </div>
                 <div class="card">
-                    <h3>✅ Approved Today</h3>
+                    <h3>Approved Today</h3>
                     <div class="metric-value" id="approved-today">0</div>
                     <div class="metric-label">Devices Approved</div>
                 </div>
                 <div class="card">
-                    <h3>❌ Rejected Today</h3>
+                    <h3>Rejected Today</h3>
                     <div class="metric-value" id="rejected-today">0</div>
                     <div class="metric-label">Devices Rejected</div>
                 </div>
             </div>
             <div class="card" style="margin-top: 1rem;">
-                <h3>📋 Pending Device Approvals</h3>
+                <h3>Pending Device Approvals</h3>
                 <p style="color: var(--text-secondary); margin-bottom: 1rem;">
                     New devices detected on the WiFi network are listed below. Review and approve or reject each device.
                 </p>
@@ -1594,7 +1594,7 @@
                 </div>
             </div>
             <div class="card" style="margin-top: 1rem;">
-                <h3>📜 Device Approval History</h3>
+                <h3>Device Approval History</h3>
                 <div id="device-history-container" class="scroll-container">
                     <div class="loading-indicator">Loading history...</div>
                 </div>
@@ -2146,7 +2146,7 @@
                             </div>
                             <div class="alert-message">${alert.message}</div>
                             ${alert.device ? `<div class="alert-device">Device: ${alert.device}</div>` : ''}
-                            ${isRedirected ? `<div class="alert-honeypot">🔴 Redirected to honeypot${activityCount > 0 ? ` (${activityCount} activities logged)` : ''}</div>` : ''}
+                            ${isRedirected ? `<div class="alert-honeypot">Redirected to honeypot${activityCount > 0 ? ` (${activityCount} activities logged)` : ''}</div>` : ''}
                         </div>
                     `;
                     }).join('');
@@ -2324,7 +2324,7 @@
                     if (!detections || detections.length === 0) {
                         container.innerHTML = `
                         <div class="detection-item normal">
-                            <div class="detection-icon">✅</div>
+                            <div class="detection-icon"></div>
                             <div class="detection-content">
                                 <div class="detection-header-row">
                                     <span class="detection-type">No Threats Detected</span>
@@ -2349,7 +2349,7 @@
 
                         container.innerHTML = recentDetections.map(detection => {
                             const isAttack = detection.is_attack;
-                            const icon = isAttack ? '🚨' : '✅';
+                            const icon = isAttack ? '' : '';
                             const type = detection.attack_type || 'Normal Traffic';
                             const confidence = Number(detection.confidence) * 100;
                             const timestamp = detection.timestamp ? new Date(detection.timestamp).toLocaleTimeString() : '';
@@ -2374,7 +2374,7 @@
                                         <div class="detection-device">Device: ${device}</div>
                                         ${isAttack ? `
                                             <div class="attack-details">
-                                                <strong>⚠️ Attack Details:</strong>
+                                                <strong>Attack Details:</strong>
                                                 <ul style="margin: 0.5rem 0; padding-left: 1rem;">
                                                     <li>Attack Type: ${type}</li>
                                                     <li>Confidence Level: ${confidence.toFixed(1)}%</li>
@@ -2402,7 +2402,7 @@
                         setTimeout(() => updateMLDetections(true), 2000 * mlDetectionRetryCount);
                         container.innerHTML = `
                         <div class="detection-item normal">
-                            <div class="detection-icon">🔄</div>
+                            <div class="detection-icon"></div>
                             <div class="detection-content">
                                 <div class="detection-header-row">
                                     <span class="detection-type">Reconnecting to ML Engine...</span>
@@ -2416,7 +2416,7 @@
                     } else {
                         container.innerHTML = `
                         <div class="detection-item attack">
-                            <div class="detection-icon">❌</div>
+                            <div class="detection-icon"></div>
                             <div class="detection-content">
                                 <div class="detection-header-row">
                                     <span class="detection-type">ML Engine Connection Error</span>
@@ -2439,13 +2439,13 @@
             const statusSubtitle = document.getElementById('ml-status-subtitle');
 
             if (mlMonitoringActive) {
-                button.innerHTML = '<span class="button-icon">⏸️</span>Pause Monitoring';
+                button.innerHTML = '<span class="button-icon"></span>Pause Monitoring';
                 statusDot.className = 'status-dot-large active';
                 statusText.textContent = 'Active - Monitoring';
                 statusSubtitle.textContent = 'ML model loaded and monitoring network traffic';
                 startMLUpdates();
             } else {
-                button.innerHTML = '<span class="button-icon">▶️</span>Resume Monitoring';
+                button.innerHTML = '<span class="button-icon"></span>Resume Monitoring';
                 statusDot.className = 'status-dot-large';
                 statusText.textContent = 'Paused';
                 statusSubtitle.textContent = 'Monitoring paused by user';
