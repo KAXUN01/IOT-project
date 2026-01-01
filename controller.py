@@ -1478,10 +1478,15 @@ def get_trust_scores():
         JSON dictionary mapping device_id to trust score
     """
     if not ONBOARDING_AVAILABLE or not onboarding:
-        return json.dumps({
-            'status': 'error',
-            'message': 'Device onboarding system not available'
-        }), 503
+        response = app.response_class(
+            response=json.dumps({
+                'status': 'error',
+                'message': 'Device onboarding system not available'
+            }),
+            status=503,
+            mimetype='application/json'
+        )
+        return response
     
     try:
         # Get trust scores from database
@@ -1492,19 +1497,29 @@ def get_trust_scores():
         if scores:
             avg_score = sum(scores.values()) / len(scores)
             
-        return json.dumps({
-            'status': 'success',
-            'scores': scores,
-            'average_score': round(avg_score, 1)
-        }), 200
+        response = app.response_class(
+            response=json.dumps({
+                'status': 'success',
+                'scores': scores,
+                'average_score': round(avg_score, 1)
+            }),
+            status=200,
+            mimetype='application/json'
+        )
+        return response
         
     except Exception as e:
         app.logger.error(f"Error getting trust scores: {e}")
-        return json.dumps({
-            'status': 'error',
-            'message': str(e),
-            'scores': {}
-        }), 500
+        response = app.response_class(
+            response=json.dumps({
+                'status': 'error',
+                'message': str(e),
+                'scores': {}
+            }),
+            status=500,
+            mimetype='application/json'
+        )
+        return response
 
 @app.route('/api/trust_score_history/<device_id>', methods=['GET'])
 def get_trust_score_history(device_id):
