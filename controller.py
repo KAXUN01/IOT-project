@@ -1411,6 +1411,78 @@ def get_suspicious_device_alerts():
         'alerts': suspicious_device_alerts[-50:]  # Return last 50 alerts
     }), 200
 
+@app.route('/api/trust_scores', methods=['GET'])
+def get_trust_scores():
+    """
+    Get all device trust scores
+    
+    Returns:
+        JSON dictionary mapping device_id to trust score
+    """
+    if not ONBOARDING_AVAILABLE or not onboarding:
+        return json.dumps({
+            'status': 'error',
+            'message': 'Device onboarding system not available'
+        }), 503
+    
+    try:
+        # Get trust scores from database
+        scores = onboarding.identity_db.load_all_trust_scores()
+        
+        # Calculate average score
+        avg_score = 0
+        if scores:
+            avg_score = sum(scores.values()) / len(scores)
+            
+        return json.dumps({
+            'status': 'success',
+            'scores': scores,
+            'average_score': round(avg_score, 1)
+        }), 200
+        
+    except Exception as e:
+        app.logger.error(f"Error getting trust scores: {e}")
+        return json.dumps({
+            'status': 'error',
+            'message': str(e),
+            'scores': {}
+        }), 500
+
+@app.route('/api/trust_score_history/<device_id>', methods=['GET'])
+def get_trust_score_history(device_id):
+    """
+    Get trust score history for a device
+    
+    Args:
+        device_id: Device identifier
+        
+    Returns:
+        JSON list of history entries
+    """
+    if not ONBOARDING_AVAILABLE or not onboarding:
+        return json.dumps({
+            'status': 'error',
+            'message': 'Device onboarding system not available'
+        }), 503
+    
+    try:
+        limit = int(request.args.get('limit', 50))
+        history = onboarding.identity_db.get_trust_score_history(device_id, limit)
+        
+        return json.dumps({
+            'status': 'success',
+            'device_id': device_id,
+            'history': history
+        }), 200
+        
+    except Exception as e:
+        app.logger.error(f"Error getting trust score history: {e}")
+        return json.dumps({
+            'status': 'error',
+            'message': str(e),
+            'history': []
+        }), 500
+
 @app.route('/api/alerts/create', methods=['POST'])
 def create_alert():
     """

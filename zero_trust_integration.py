@@ -274,11 +274,24 @@ class ZeroTrustFramework:
                         if device_id not in self.attestation.device_attestations:
                             self.attestation.start_attestation(device_id)
                         
+                        # Get last_seen timestamp from device record
+                        last_seen = device.get('last_seen')
+                        if isinstance(last_seen, str):
+                            try:
+                                # Parse ISO format string from DB
+                                dt = datetime.fromisoformat(last_seen.replace('Z', '+00:00'))
+                                last_seen_ts = dt.timestamp()
+                            except:
+                                last_seen_ts = None
+                        else:
+                            last_seen_ts = last_seen if last_seen else None
+                        
                         # Perform attestation check
                         result = self.attestation.perform_attestation(
                             device_id,
                             cert_path if cert_path else None,
-                            self.onboarding.cert_manager if cert_path else None
+                            self.onboarding.cert_manager if cert_path else None,
+                            last_seen_timestamp=last_seen_ts
                         )
                         
                         if not result['passed']:

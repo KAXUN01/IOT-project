@@ -189,6 +189,25 @@ class TrustScorer:
         # Update attestation factor
         if device_id in self.device_scores:
             self.device_scores[device_id]['factors']['attestation'] += 20
+            
+    def record_attestation_success(self, device_id: str):
+        """
+        Record device attestation success to recover trust
+        
+        Args:
+            device_id: Device identifier
+        """
+        # Only adjust if score is not perfect
+        current_score = self.get_trust_score(device_id)
+        if current_score is not None and current_score < self.initial_score:
+            # Recover faster if it was just an attestation failure
+            self.adjust_trust_score(device_id, +5, "Attestation success")
+            
+        # Reduce attestation factor if it's high
+        if device_id in self.device_scores:
+            factors = self.device_scores[device_id]['factors']
+            if factors['attestation'] > 0:
+                factors['attestation'] = max(0, factors['attestation'] - 5)
     
     def record_security_alert(self, device_id: str, alert_type: str, severity: str):
         """
