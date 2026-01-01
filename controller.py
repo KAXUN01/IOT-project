@@ -61,15 +61,14 @@ app = Flask(__name__)
 
 # Device authorization (static for now, can be dynamic)
 authorized_devices = {
-    "ESP32_2": True,
-    "ESP32_3": True,
-    "ESP32_4": False
+    "Sensor_A": True,
+    "Sensor_B": True
 }
-device_data = {"ESP32_2": [], "ESP32_3": [], "ESP32_4": []}
+device_data = {"Sensor_A": [], "Sensor_B": []}
 timestamps = []
-last_seen = {"ESP32_2": 0, "ESP32_3": 0, "ESP32_4": 0}
+last_seen = {"Sensor_A": 0, "Sensor_B": 0}
 device_tokens = {}  # {device_id: {"token": token, "last_activity": timestamp}}
-packet_counts = {"ESP32_2": [], "ESP32_3": [], "ESP32_4": []}  # For rate limiting
+packet_counts = {"Sensor_A": [], "Sensor_B": []}  # For rate limiting
 SESSION_TIMEOUT = 300  # 5 minutes
 RATE_LIMIT = 60  # Max 60 packets per minute per device
 
@@ -118,6 +117,64 @@ if ONBOARDING_AVAILABLE:
         ONBOARDING_AVAILABLE = False
 else:
     print("⚠️  Device onboarding not available - using static authorization")
+
+def initialize_test_devices():
+    """
+    Initialize test devices in the identity database
+    
+    Ensures that test devices (Sensor_A, Sensor_B) are registered
+    in the onboarding database with default trust scores so that
+    dashboard statistics display correctly.
+    """
+    if not ONBOARDING_AVAILABLE or not onboarding:
+        return
+    
+    test_devices = {
+        "Sensor_A": "AA:BB:CC:DD:EE:AA",
+        "Sensor_B": "AA:BB:CC:DD:EE:BB"
+    }
+    
+    for device_id, mac_address in test_devices.items():
+        try:
+            # Check if device already exists
+            existing_device = onboarding.identity_db.get_device(device_id)
+            
+            if not existing_device:
+                # Add device to database
+                success = onboarding.identity_db.add_device(
+                    device_id=device_id,
+                    mac_address=mac_address,
+                    device_type="Sensor",
+                    device_info=json.dumps({"test_device": True, "type": "virtual"})
+                )
+                
+                if success:
+                    # Set initial trust score
+                    onboarding.identity_db.save_trust_score(
+                        device_id=device_id,
+                        trust_score=70,  # Default trusted level
+                        reason="Initial test device registration"
+                    )
+                    print(f"✅ Test device {device_id} registered with trust score 70")
+                else:
+                    print(f"⚠️  Failed to register test device {device_id}")
+            else:
+                # Device exists, ensure it has a trust score
+                current_score = onboarding.identity_db.get_trust_score(device_id)
+                if current_score is None:
+                    onboarding.identity_db.save_trust_score(
+                        device_id=device_id,
+                        trust_score=70,
+                        reason="Setting initial trust score for existing device"
+                    )
+                    print(f"✅ Trust score set for existing device {device_id}")
+                    
+        except Exception as e:
+            print(f"⚠️  Error initializing test device {device_id}: {e}")
+
+# Initialize test devices if onboarding is available
+if ONBOARDING_AVAILABLE and onboarding:
+    initialize_test_devices()
 
 # Initialize Auto-Onboarding Service
 auto_onboarding_service = None
@@ -705,8 +762,9 @@ def get_topology_with_mac():
             "onboarded": device_id in devices_from_db
         })
         
-        # Only add edge if device is online/connected
-        if online and device_status != 'revoked':
+        # Show edge connection to gateway for all authorized/active devices
+        # (not just online ones, so devices appear in topology immediately)
+        if device_status != 'revoked':
             topology["edges"].append({
                 "from": device_id,
                 "to": "ESP32_Gateway"

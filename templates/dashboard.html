@@ -1113,34 +1113,7 @@
 
         <!-- Devices Tab -->
         <section id="devices" class="tab-content">
-            <div class="grid-container">
-                <div class="card">
-                    <h3>Device Statistics</h3>
-                    <div class="stats-grid">
-                        <div class="stat-item">
-                            <div class="stat-icon"></div>
-                            <div class="stat-content">
-                                <div class="stat-value" id="devices-total-count">0</div>
-                                <div class="stat-label">Total Devices</div>
-                            </div>
-                        </div>
-                        <div class="stat-item">
-                            <div class="stat-icon"></div>
-                            <div class="stat-content">
-                                <div class="stat-value" id="devices-online-count">0</div>
-                                <div class="stat-label">Online</div>
-                            </div>
-                        </div>
-                        <div class="stat-item">
-                            <div class="stat-icon"></div>
-                            <div class="stat-content">
-                                <div class="stat-value" id="devices-total-packets">0</div>
-                                <div class="stat-label">Total Packets</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+
             <div class="card">
                 <h3>Connected Devices</h3>
                 <div class="scroll-container">
@@ -1790,10 +1763,8 @@
                 updateAnalytics();
             }
 
-            // Update trust scores if active
-            if (document.getElementById('trust').classList.contains('active')) {
-                updateTrustScores();
-            }
+            // Always update trust scores (not just when tab is active)
+            updateTrustScores();
 
             // Update honeypot if active
             if (document.getElementById('honeypot').classList.contains('active')) {
@@ -2606,30 +2577,37 @@
 
         // Trust Scores Update Functions
         function updateTrustScores() {
+            console.log('[Trust Scores] Fetching from /api/trust_scores...');
             fetch('/api/trust_scores')
                 .then(response => {
                     // Check if response is JSON
                     const contentType = response.headers.get('content-type');
+                    console.log('[Trust Scores] Response status:', response.status, 'Content-Type:', contentType);
                     if (!response.ok || !contentType || !contentType.includes('application/json')) {
                         // API endpoint not implemented or returned error - fail silently
+                        console.warn('[Trust Scores] Invalid response, skipping update');
                         return null;
                     }
                     return response.json();
                 })
                 .then(data => {
+                    console.log('[Trust Scores] Received data:', data);
                     if (!data) return;  // Skip if endpoint not available
                     const scores = data.scores || {};
                     const scoresList = Object.entries(scores);
+                    console.log('[Trust Scores] Scores list:', scoresList);
 
                     // Calculate average
                     const avgScore = scoresList.length > 0
                         ? Math.round(scoresList.reduce((sum, [_, score]) => sum + score, 0) / scoresList.length)
                         : 0;
+                    console.log('[Trust Scores] Average score:', avgScore);
                     document.getElementById('avg-trust-score').textContent = avgScore;
 
                     // Count trusted and suspicious devices
                     const trusted = scoresList.filter(([_, score]) => score >= 70).length;
                     const suspicious = scoresList.filter(([_, score]) => score < 50).length;
+                    console.log('[Trust Scores] Trusted:', trusted, 'Suspicious:', suspicious);
                     document.getElementById('trusted-devices-count').textContent = trusted;
                     document.getElementById('suspicious-devices-count').textContent = suspicious;
 
@@ -2664,10 +2642,11 @@
                             </tr>
                         `;
                     }).join('');
+                    console.log('[Trust Scores] Table updated with', scoresList.length, 'devices');
                 })
                 .catch(error => {
-                    // Silently fail - endpoint may not be implemented yet
-                    // console.debug('Trust scores endpoint not available:', error);
+                   // Silently fail - endpoint may not be implemented yet
+                    console.error('[Trust Scores] Error:', error);
                 });
         }
 

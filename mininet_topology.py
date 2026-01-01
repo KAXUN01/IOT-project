@@ -257,17 +257,14 @@ def create_test_topology():
     
     # Add switches
     switch1 = topology.add_switch("s1")
-    switch2 = topology.add_switch("s2")
     
-    # Add hosts (IoT devices)
-    host1 = topology.add_host("ESP32_2")
-    host2 = topology.add_host("ESP32_3")
-    host3 = topology.add_host("ESP32_4")
+    # Add hosts (IoT devices) - Sensor_A and Sensor_B
+    host1 = topology.add_host("Sensor_A")
+    host2 = topology.add_host("Sensor_B")
     
     # Create network links
-    topology.add_link("ESP32_2", "s1")
-    topology.add_link("ESP32_3", "s1")
-    topology.add_link("ESP32_4", "s2")
+    topology.add_link("Sensor_A", "s1")
+    topology.add_link("Sensor_B", "s1")
     
     # Show topology
     topology.show_topology()
@@ -297,20 +294,21 @@ def main():
     # Start network
     threads = topology.start_network()
     
-    # Monitor for 30 seconds
-    print("\n📊 Monitoring network for 30 seconds...")
-    for i in range(6):
-        topology.monitor_controller()
-        time.sleep(5)
+    print("\n📊 Virtual IoT devices are now running continuously...")
+    print("   Devices will send data every 3 seconds")
+    print("   Press Ctrl+C to stop\n")
     
-    # Test SDN policies
-    topology.test_sdn_policies()
-    
-    # Stop network
-    topology.stop_network()
-    
-    print("\n✅ SDN Test Complete!")
-    print("🌐 View results at: http://localhost:5000")
+    # Keep running until interrupted
+    try:
+        while True:
+            time.sleep(10)
+            # Optional: periodically show status
+            # topology.monitor_controller()
+    except KeyboardInterrupt:
+        print("\n\n🛑 Stopping Virtual Network...")
+        topology.stop_network()
+        print("\n✅ Virtual devices stopped")
+        print("🌐 View results at: http://localhost:5000")
 
 if __name__ == "__main__":
     main()
