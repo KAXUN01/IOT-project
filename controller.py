@@ -57,6 +57,16 @@ except ImportError as e:
     def get_ml_engine():
         return None
 
+# Try to import cryptography for certificate validation
+try:
+    from cryptography import x509
+    from cryptography.hazmat.backends import default_backend
+    CRYPTOGRAPHY_AVAILABLE = True
+except ImportError:
+    CRYPTOGRAPHY_AVAILABLE = False
+    print("⚠️  cryptography module not available. Certificate expiry checks will be limited.")
+
+
 app = Flask(__name__)
 
 # Device authorization (static for now, can be dynamic)
@@ -1815,6 +1825,147 @@ def remove_device_redirect(device_id):
         return json.dumps({
             'status': 'error',
             'message': str(e)
+        }), 500
+
+@app.route('/api/certificates', methods=['GET'])
+def get_certificates():
+    """
+    Get all device certificates and their status
+    
+    Returns:
+        JSON with list of certificates and their status (valid/expired/expiring)
+    """
+    if not ONBOARDING_AVAILABLE or not onboarding:
+        return json.dumps({
+            'status': 'error',
+            'message': 'Device onboarding system not available',
+            'certificates': []
+        }), 503
+    
+    try:
+        # Get all devices from database
+        devices = onboarding.identity_db.get_all_devices()
+        
+        certificates = []
+        current_time = datetime.now()
+        
+        for device in devices:
+            device_id = device.get('device_id')
+            mac_address = device.get('mac_address')
+            cert_path = device.get('certificate_path')
+            
+            if not cert_path or not os.path.exists(cert_path):
+                continue
+            
+            # Determine certificate status
+            cert_status = 'unknown'
+            valid_until = None
+            
+            try:
+                # Try to get certificate expiry date
+                if CRYPTOGRAPHY_AVAILABLE:
+                    try:
+                        from cryptography import x509
+                        from cryptography.hazmat.backends import default_backend
+                        
+                        with open(cert_path, 'rb') as f:
+                            cert = x509.load_pem_x509_certificate(f.read(), default_backend())
+                        
+                        not_after = cert.not_valid_after
+                        not_before = cert.not_valid_before
+                        
+                        # Convert to datetime if needed
+                        if hasattr(not_after, 'replace'):
+                            # Already a datetime
+                            pass
+                        
+                        valid_until = not_after.strftime('%Y-%m-%d %H:%M:%S')
+                        
+                        # Check if expired
+                        if not_after < current_time:
+                            cert_status = 'expired'
+                        elif not_before > current_time:
+                            cert_status = 'not_yet_valid'
+                        else:
+                            # Check if expiring soon (within 30 days)
+                            days_until_expiry = (not_after - current_time).days
+                            if days_until_expiry <= 30:
+                                cert_status = 'expiring'
+                            else:
+                                cert_status = 'valid'
+                    except Exception as e:
+                        app.logger.warning(f"Error reading certificate for {device_id}: {e}")
+                        cert_status = 'error'
+                else:
+                    # Cryptography not available, assume valid
+                    cert_status = 'valid'
+                    valid_until = 'Unknown'
+            except Exception as e:
+                app.logger.error(f"Error checking certificate for {device_id}: {e}")
+                cert_status = 'error'
+            
+            certificates.append({
+                'device_id': device_id,
+                'mac_address': mac_address,
+                'status': cert_status,
+                'valid_until': valid_until,
+                'certificate_path': cert_path
+            })
+        
+        return json.dumps({
+            'status': 'success',
+            'certificates': certificates
+        }), 200
+        
+    except Exception as e:
+        app.logger.error(f"Error getting certificates: {e}")
+        return json.dumps({
+            'status': 'error',
+            'message': str(e),
+            'certificates': []
+        }), 500
+
+@app.route('/api/certificates/<device_id>/revoke', methods=['POST'])
+def revoke_certificate(device_id):
+    """
+    Revoke a device certificate
+    
+    Args:
+        device_id: Device identifier
+    """
+    if not ONBOARDING_AVAILABLE or not onboarding:
+        return json.dumps({
+            'success': False,
+            'error': 'Device onboarding system not available'
+        }), 503
+    
+    try:
+        # Update device status to revoked
+        success = onboarding.identity_db.update_device_status(device_id, 'revoked')
+        
+        if success:
+            # Also try to revoke certificate through certificate manager
+            if hasattr(onboarding, 'cert_manager'):
+                try:
+                    onboarding.cert_manager.revoke_certificate(device_id)
+                except Exception as e:
+                    app.logger.warning(f"Certificate manager revocation failed: {e}")
+            
+            return json.dumps({
+                'success': True,
+                'message': f'Certificate revoked for {device_id}'
+            }), 200
+        else:
+            return json.dumps({
+                'success': False,
+                'error': 'Failed to revoke certificate'
+            }), 500
+            
+    except Exception as e:
+        app.logger.error(f"Error revoking certificate: {e}")
+        return json.dumps({
+            'success': False,
+            'error': str(e)
         }), 500
 
 if __name__ == '__main__':

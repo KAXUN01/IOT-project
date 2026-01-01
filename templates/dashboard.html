@@ -1430,28 +1430,28 @@
                         <div class="stat-item">
                             <div class="stat-icon"></div>
                             <div class="stat-content">
-                                <div class="stat-value" id="certificates-total">0</div>
+                                <div class="stat-value" id="total-certificates">0</div>
                                 <div class="stat-label">Total Certificates</div>
                             </div>
                         </div>
                         <div class="stat-item">
                             <div class="stat-icon"></div>
                             <div class="stat-content">
-                                <div class="stat-value" id="certificates-valid">0</div>
+                                <div class="stat-value" id="valid-certificates">0</div>
                                 <div class="stat-label">Valid</div>
                             </div>
                         </div>
                         <div class="stat-item">
                             <div class="stat-icon"></div>
                             <div class="stat-content">
-                                <div class="stat-value" id="certificates-expiring">0</div>
+                                <div class="stat-value" id="expiring-certificates">0</div>
                                 <div class="stat-label">Expiring Soon</div>
                             </div>
                         </div>
                         <div class="stat-item">
                             <div class="stat-icon"></div>
                             <div class="stat-content">
-                                <div class="stat-value" id="certificates-expired">0</div>
+                                <div class="stat-value" id="expired-certificates">0</div>
                                 <div class="stat-label">Expired</div>
                             </div>
                         </div>
@@ -2645,7 +2645,7 @@
                     console.log('[Trust Scores] Table updated with', scoresList.length, 'devices');
                 })
                 .catch(error => {
-                   // Silently fail - endpoint may not be implemented yet
+                    // Silently fail - endpoint may not be implemented yet
                     console.error('[Trust Scores] Error:', error);
                 });
         }
@@ -2752,8 +2752,10 @@
                     document.getElementById('total-certificates').textContent = certificates.length;
 
                     const valid = certificates.filter(c => c.status === 'valid').length;
+                    const expiring = certificates.filter(c => c.status === 'expiring').length;
                     const expired = certificates.filter(c => c.status === 'expired').length;
                     document.getElementById('valid-certificates').textContent = valid;
+                    document.getElementById('expiring-certificates').textContent = expiring;
                     document.getElementById('expired-certificates').textContent = expired;
 
                     // Update certificates table
