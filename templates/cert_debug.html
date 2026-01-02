@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Certificate Debug</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+        }
+
+        .box {
+            border: 1px solid #ccc;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+
+        .success {
+            background-color: #d4edda;
+            border-color: #c3e6cb;
+        }
+
+        .error {
+            background-color: #f8d7da;
+            border-color: #f5c6cb;
+        }
+
+        pre {
+            background: #f4f4f4;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 5px;
+        }
+
+        .metric {
+            display: inline-block;
+            margin: 10px 20px;
+        }
+
+        .metric-value {
+            font-size: 2em;
+            font-weight: bold;
+            color: #007bff;
+        }
+
+        .metric-label {
+            font-size: 0.9em;
+            color: #666;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Certificate Overview Debug</h1>
+
+    <div class="box">
+        <h2>Test Certificate Display</h2>
+        <div class="metric">
+            <div class="metric-value" id="total-certificates">0</div>
+            <div class="metric-label">Total Certificates</div>
+        </div>
+        <div class="metric">
+            <div class="metric-value" id="valid-certificates">0</div>
+            <div class="metric-label">Valid</div>
+        </div>
+        <div class="metric">
+            <div class="metric-value" id="expiring-certificates">0</div>
+            <div class="metric-label">Expiring Soon</div>
+        </div>
+        <div class="metric">
+            <div class="metric-value" id="expired-certificates">0</div>
+            <div class="metric-label">Expired</div>
+        </div>
+    </div>
+
+    <button onclick="testUpdateCertificates()">Update Certificates (Manual Test)</button>
+    <button onclick="testAPICall()">Test API Call Only</button>
+
+    <div class="box" id="status"></div>
+    <div class="box">
+        <h3>API Response:</h3>
+        <pre id="api-response">Click button to test...</pre>
+    </div>
+    <div class="box">
+        <h3>Debug Log:</h3>
+        <pre id="debug-log"></pre>
+    </div>
+
+    <script>
+        let debugLog = [];
+
+        function log(message) {
+            debugLog.push(`[${new Date().toLocaleTimeString()}] ${message}`);
+            document.getElementById('debug-log').textContent = debugLog.join('\n');
+            console.log(message);
+        }
+
+        function testAPICall() {
+            log('Testing API call to /api/certificates...');
+            document.getElementById('status').className = 'box';
+            document.getElementById('status').innerHTML = '<p>Testing...</p>';
+
+            fetch('/api/certificates')
+                .then(response => {
+                    log(`Response status: ${response.status}`);
+                    log(`Response headers: ${response.headers.get('content-type')}`);
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    log(`API returned: ${JSON.stringify(data, null, 2)}`);
+                    document.getElementById('api-response').textContent = JSON.stringify(data, null, 2);
+
+                    if (data.status === 'success') {
+                        document.getElementById('status').className = 'box success';
+                        document.getElementById('status').innerHTML = `<p>✅ API call successful! Found ${data.certificates.length} certificates</p>`;
+                    } else {
+                        document.getElementById('status').className = 'box error';
+                        document.getElementById('status').innerHTML = `<p>❌ API returned error: ${data.message}</p>`;
+                    }
+                })
+                .catch(error => {
+                    log(`Error: ${error.message}`);
+                    document.getElementById('status').className = 'box error';
+                    document.getElementById('status').innerHTML = `<p>❌ Error: ${error.message}</p>`;
+                    document.getElementById('api-response').textContent = `Error: ${error.message}`;
+                });
+        }
+
+        function testUpdateCertificates() {
+            log('Running updateCertificates() function...');
+            document.getElementById('status').className = 'box';
+            document.getElementById('status').innerHTML = '<p>Updating certificates...</p>';
+
+            fetch('/api/certificates')
+                .then(response => {
+                    log(`Response received: ${response.status}`);
+                    const contentType = response.headers.get('content-type');
+                    if (!response.ok || !contentType || !contentType.includes('application/json')) {
+                        log(`Non-JSON response or error: ${response.status}`);
+                        return null;
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (!data) {
+                        log('No data returned (endpoint not available)');
+                        return;
+                    }
+
+                    log(`Processing ${data.certificates ? data.certificates.length : 0} certificates`);
+                    const certificates = data.certificates || [];
+
+                    // Update total
+                    const totalEl = document.getElementById('total-certificates');
+                    if (totalEl) {
+                        totalEl.textContent = certificates.length;
+                        log(`Set total-certificates to ${certificates.length}`);
+                    } else {
+                        log('ERROR: total-certificates element not found!');
+                    }
+
+                    // Calculate counts
+                    const valid = certificates.filter(c => c.status === 'valid').length;
+                    const expiring = certificates.filter(c => c.status === 'expiring').length;
+                    const expired = certificates.filter(c => c.status === 'expired').length;
+
+                    log(`Valid: ${valid}, Expiring: ${expiring}, Expired: ${expired}`);
+
+                    // Update valid
+                    const validEl = document.getElementById('valid-certificates');
+                    if (validEl) {
+                        validEl.textContent = valid;
+                        log(`Set valid-certificates to ${valid}`);
+                    } else {
+                        log('ERROR: valid-certificates element not found!');
+                    }
+
+                    // Update expiring
+                    const expiringEl = document.getElementById('expiring-certificates');
+                    if (expiringEl) {
+                        expiringEl.textContent = expiring;
+                        log(`Set expiring-certificates to ${expiring}`);
+                    } else {
+                        log('ERROR: expiring-certificates element not found!');
+                    }
+
+                    // Update expired
+                    const expiredEl = document.getElementById('expired-certificates');
+                    if (expiredEl) {
+                        expiredEl.textContent = expired;
+                        log(`Set expired-certificates to ${expired}`);
+                    } else {
+                        log('ERROR: expired-certificates element not found!');
+                    }
+
+                    document.getElementById('status').className = 'box success';
+                    document.getElementById('status').innerHTML = `<p>✅ Updated successfully!</p>`;
+                    document.getElementById('api-response').textContent = JSON.stringify(data, null, 2);
+                })
+                .catch(error => {
+                    log(`Catch block error: ${error.message}`);
+                    document.getElementById('status').className = 'box error';
+                    document.getElementById('status').innerHTML = `<p>❌ Error: ${error.message}</p>`;
+                });
+        }
+
+        // Auto-run on page load
+        window.onload = function () {
+            log('Page loaded, running automatic test...');
+            testUpdateCertificates();
+        };
+    </script>
+</body>
+
+</html>

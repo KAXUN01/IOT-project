@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Certificate API Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+        }
+
+        pre {
+            background: #f4f4f4;
+            padding: 10px;
+            border-radius: 5px;
+        }
+
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Certificate API Test</h1>
+    <button onclick="testAPI()">Test /api/certificates Endpoint</button>
+    <h2>Response:</h2>
+    <pre id="response">Click the button to test the API...</pre>
+
+    <script>
+        function testAPI() {
+            document.getElementById('response').textContent = 'Loading...';
+
+            fetch('/api/certificates')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('response').textContent = JSON.stringify(data, null, 2);
+                    console.log('API Response:', data);
+
+                    // Test updating DOM elements if they exist
+                    const totalCerts = data.certificates ? data.certificates.length : 0;
+                    console.log('Total certificates:', totalCerts);
+                })
+                .catch(error => {
+                    document.getElementById('response').textContent = 'Error: ' + error.message;
+                    console.error('API Error:', error);
+                });
+        }
+
+        // Auto-run on page load
+        window.onload = testAPI;
+    </script>
+</body>
+
+</html>

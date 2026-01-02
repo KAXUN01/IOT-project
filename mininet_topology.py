@@ -258,13 +258,15 @@ def create_test_topology():
     # Add switches
     switch1 = topology.add_switch("s1")
     
-    # Add hosts (IoT devices) - Sensor_A and Sensor_B
+    # Add hosts (IoT devices) - Sensor_A, Sensor_B, and Sensor_C
     host1 = topology.add_host("Sensor_A")
     host2 = topology.add_host("Sensor_B")
+    host3 = topology.add_host("Sensor_C")
     
     # Create network links
     topology.add_link("Sensor_A", "s1")
     topology.add_link("Sensor_B", "s1")
+    topology.add_link("Sensor_C", "s1")
     
     # Show topology
     topology.show_topology()

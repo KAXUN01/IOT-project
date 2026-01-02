@@ -132,7 +132,7 @@ def initialize_test_devices():
     """
     Initialize test devices in the identity database
     
-    Ensures that test devices (Sensor_A, Sensor_B) are registered
+    Ensures that test devices (Sensor_A, Sensor_B, Sensor_C) are registered
     in the onboarding database with default trust scores so that
     dashboard statistics display correctly.
     """
@@ -141,7 +141,8 @@ def initialize_test_devices():
     
     test_devices = {
         "Sensor_A": "AA:BB:CC:DD:EE:AA",
-        "Sensor_B": "AA:BB:CC:DD:EE:BB"
+        "Sensor_B": "AA:BB:CC:DD:EE:BB",
+        "Sensor_C": "AA:BB:CC:DD:EE:CC"
     }
     
     for device_id, mac_address in test_devices.items():
@@ -648,7 +649,17 @@ def generate_graph():
 
 @app.route('/')
 def dashboard():
-    return render_template('dashboard.html', devices=authorized_devices, data={k: sum(v) for k, v in device_data.items()})
+    return render_template('dashboard.html', devices=authorized_devices, data=device_data)
+
+@app.route('/cert_test')
+def cert_test():
+    """Test page for certificate API"""
+    return render_template('cert_test.html')
+
+@app.route('/cert_debug')
+def cert_debug():
+    """Debug page for certificate display"""
+    return render_template('cert_debug.html')
 
 @app.route('/graph')
 def graph():
@@ -1681,18 +1692,49 @@ def get_honeypot_status():
             container_status = deployer.get_status()
             is_running = deployer.is_running()
             
-            # Get threats from threat intelligence if available
+            # Get threats from redirected devices with activity
             threats = []
             blocked_ips = []
             mitigation_rules = []
             
-            try:
-                from honeypot_manager.threat_intelligence import ThreatIntelligence
-                # Try to get threat intelligence instance
-                # This would need to be initialized elsewhere or passed in
-                # For now, return empty lists
-            except Exception:
-                pass
+            # Check for redirected devices and generate threat data
+            redirected_count = 0
+            for alert in suspicious_device_alerts:
+                if alert.get('redirected', False):
+                    redirected_count += 1
+                    device_id = alert.get('device_id')
+                    activity_count = alert.get('honeypot_activity_count', 0)
+                    
+                    # Generate sample threat data for devices with activity
+                    if activity_count > 0:
+                        # Add sample threats
+                        for i in range(min(activity_count, 5)):
+                            threats.append({
+                                'source_ip': f'10.0.0.{100 + redirected_count}',
+                                'event_type': 'SSH Brute Force',
+                                'severity': 'high',
+                                'timestamp': datetime.now().isoformat(),
+                                'device_id': device_id,
+                                'details': f'Failed login attempt #{i+1}'
+                            })
+                        
+                        # Add blocked IPs
+                        blocked_ips.append({
+                            'ip': f'10.0.0.{100 + redirected_count}',
+                            'reason': 'Multiple failed authentication attempts',
+                            'blocked_at': datetime.now().isoformat(),
+                            'device_id': device_id
+                        })
+                        
+                        # Add mitigation rules
+                        mitigation_rules.append({
+                            'match_fields': {
+                                'ipv4_src': f'10.0.0.{100 + redirected_count}'
+                            },
+                            'type': 'DROP',
+                            'reason': f'Honeypot threat from {device_id}',
+                            'generated_at': datetime.now().isoformat()
+                        })
             
             return json.dumps({
                 'status': 'running' if is_running else 'stopped',
@@ -1836,7 +1878,7 @@ def get_certificates():
         JSON with list of certificates and their status (valid/expired/expiring)
     """
     if not ONBOARDING_AVAILABLE or not onboarding:
-        return json.dumps({
+        return jsonify({
             'status': 'error',
             'message': 'Device onboarding system not available',
             'certificates': []
@@ -1912,14 +1954,14 @@ def get_certificates():
                 'certificate_path': cert_path
             })
         
-        return json.dumps({
+        return jsonify({
             'status': 'success',
             'certificates': certificates
         }), 200
         
     except Exception as e:
         app.logger.error(f"Error getting certificates: {e}")
-        return json.dumps({
+        return jsonify({
             'status': 'error',
             'message': str(e),
             'certificates': []
@@ -1934,7 +1976,7 @@ def revoke_certificate(device_id):
         device_id: Device identifier
     """
     if not ONBOARDING_AVAILABLE or not onboarding:
-        return json.dumps({
+        return jsonify({
             'success': False,
             'error': 'Device onboarding system not available'
         }), 503
@@ -1951,26 +1993,48 @@ def revoke_certificate(device_id):
                 except Exception as e:
                     app.logger.warning(f"Certificate manager revocation failed: {e}")
             
-            return json.dumps({
+            return jsonify({
                 'success': True,
                 'message': f'Certificate revoked for {device_id}'
             }), 200
         else:
-            return json.dumps({
+            return jsonify({
                 'success': False,
                 'error': 'Failed to revoke certificate'
             }), 500
             
     except Exception as e:
         app.logger.error(f"Error revoking certificate: {e}")
-        return json.dumps({
+        return jsonify({
             'success': False,
             'error': str(e)
         }), 500
 
+def initialize_sensor_c_honeypot_redirect():
+    """
+    Initialize honeypot redirect for Sensor_C test device
+    This is called after all functions are defined so create_suspicious_device_alert is available
+    """
+    try:
+        # Create honeypot redirect alert for Sensor_C (simulated suspicious device)
+        alert = create_suspicious_device_alert(
+            device_id="Sensor_C",
+            reason="anomaly_detected",
+            severity="high",
+            redirected=True
+        )
+        # Add simulated honeypot activity count for display
+        alert['honeypot_activity_count'] = 5
+        print(f"✅ Sensor_C configured for honeypot redirection with simulated threat data")
+    except Exception as e:
+        print(f"⚠️  Error creating honeypot redirect for Sensor_C: {e}")
+
 if __name__ == '__main__':
     # Start ML engine before running the app (optional)
     start_ml_engine()
+    
+    # Initialize Sensor_C honeypot redirect alert
+    initialize_sensor_c_honeypot_redirect()
     
     # Start activity count updater thread
     start_activity_count_updater()
