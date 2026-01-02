@@ -198,6 +198,27 @@ install_system_deps() {
         NEED_UPDATE=true
     fi
     
+    # Check for Docker
+    if ! command -v docker &> /dev/null; then
+        echo -e "${YELLOW}Docker not found. Attempting automatic installation...${NC}"
+        if command -v curl &> /dev/null; then
+            curl -fsSL https://get.docker.com -o get-docker.sh
+            sudo sh get-docker.sh
+            rm get-docker.sh
+            
+            # Add user to docker group
+            if [ "$EUID" -ne 0 ]; then
+                echo -e "${YELLOW}Adding user $USER to docker group...${NC}"
+                sudo usermod -aG docker "$USER"
+                echo -e "${YELLOW}NOTE: You may need to log out and back in for Docker group changes to take effect.${NC}"
+            fi
+            
+            echo -e "${GREEN}Docker installed successfully${NC}"
+        else
+            echo -e "${RED}curl not found, cannot install Docker automatically${NC}"
+        fi
+    fi
+    
     if [ "$NEED_UPDATE" = true ]; then
         echo -e "${YELLOW}Installing system packages:${NC} $PACKAGES_TO_INSTALL"
         sudo apt-get update -qq
@@ -667,14 +688,21 @@ fi
 
 if [ "$DOCKER_AVAILABLE" = true ] && [ "$DOCKER_RUNNING" = true ]; then
     echo ""
-    echo -e "${BLUE}Checking Honeypot Status...${NC}"
+    echo -e "${BLUE}Deploying Honeypot...${NC}"
     sleep 2
     
-    if docker ps --format "{{.Names}}" 2>/dev/null | grep -q "iot_honeypot"; then
-        HONEYPOT_CONTAINER=$(docker ps --format "{{.Names}}" 2>/dev/null | grep "iot_honeypot" | head -1)
-        echo -e "${GREEN}Honeypot container running: $HONEYPOT_CONTAINER${NC}"
+    # Deploy/Start Honeypot using the Python module
+    echo -e "${YELLOW}Initializing Honeypot (Cowrie)...${NC}"
+    if $PYTHON_CMD -c "from honeypot_manager.honeypot_deployer import HoneypotDeployer; print(f'DEPLOY_RESULT:{HoneypotDeployer().deploy()}')" 2>&1 | grep -q "DEPLOY_RESULT:True"; then
+        HONEYPOT_CONTAINER="iot_honeypot_cowrie"
+        echo -e "${GREEN}Honeypot deployed and running: $HONEYPOT_CONTAINER${NC}"
     else
-        echo -e "${YELLOW}Honeypot will be deployed on demand${NC}"
+        echo -e "${RED}Failed to deploy honeypot. Check logs/controller.log or docker logs.${NC}"
+        # Fallback check
+        if docker ps --format "{{.Names}}" 2>/dev/null | grep -q "iot_honeypot"; then
+            HONEYPOT_CONTAINER=$(docker ps --format "{{.Names}}" 2>/dev/null | grep "iot_honeypot" | head -1)
+            echo -e "${GREEN}Honeypot container found running: $HONEYPOT_CONTAINER${NC}"
+        fi
     fi
 fi
 
