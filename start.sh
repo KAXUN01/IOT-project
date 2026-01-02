@@ -360,30 +360,53 @@ install_python_deps() {
     
     # Install Ryu and eventlet with compatible version (critical)
     # NOTE: Ryu 4.34 is incompatible with Python 3.12+ due to setuptools changes
-    # We need to pin setuptools to an older version first, then install ryu
+    # We navigate this by patching Ryu's build hooks to remove the deprecated easy_install call.
     echo -e "${YELLOW}   Installing Ryu SDN Controller...${NC}"
+    
+    # Create logs directory if it doesn't exist (needed for logging installation)
+    mkdir -p logs
     
     # Check Python version for compatibility workaround
     PY_MINOR=$($PYTHON_CMD -c "import sys; print(sys.version_info.minor)")
     if [ "$PY_MINOR" -ge 12 ]; then
-        echo -e "${YELLOW}   Python 3.12+ detected, applying Ryu compatibility fix...${NC}"
-        # Pin setuptools to known compatible version (58.2.0 is the last version before namespace changes)
-        # Also install wheel to ensure proper build support
-        $pip_cmd install $user_flag "setuptools==58.2.0" "wheel" --quiet 2>/dev/null
+        echo -e "${YELLOW}   Python 3.12+ detected, applying Ryu compatibility fix (patching source)...${NC}"
         
-        # Install Ryu with --no-build-isolation to use our pinned setuptools
-        echo -e "${YELLOW}   Installing Ryu with build isolation disabled...${NC}"
-        if ! $pip_cmd install $user_flag --no-build-isolation ryu eventlet==0.30.2 2>&1 | tee -a logs/ryu_install.log; then
-            echo -e "${RED}   Failed to install Ryu with --no-build-isolation. Trying alternative method...${NC}"
-            # Fallback: Try with different setuptools versions
-            for version in "57.5.0" "56.0.0" "45.0.0"; do
-                echo -e "${YELLOW}   Trying setuptools $version...${NC}"
-                $pip_cmd install $user_flag "setuptools==$version" --quiet 2>/dev/null
-                if $pip_cmd install $user_flag --no-build-isolation ryu eventlet==0.30.2 2>&1 | tee -a logs/ryu_install.log; then
-                    echo -e "${GREEN}   Ryu installed successfully with setuptools $version${NC}"
-                    break
+        # Create temporary build directory
+        BUILD_DIR="/tmp/ryu_build_$(date +%s)"
+        mkdir -p "$BUILD_DIR"
+        
+        echo -e "${YELLOW}   Downloading Ryu source...${NC}"
+        if $pip_cmd download --no-deps --no-binary :all: --dest "$BUILD_DIR" "ryu>=4.34" --quiet 2>/dev/null; then
+            # Extract tarball
+            echo -e "${YELLOW}   Patching Ryu source...${NC}"
+            tar xzf "$BUILD_DIR"/ryu-*.tar.gz -C "$BUILD_DIR"
+            
+            # Find the extracted directory
+            EXTRACTED_DIR=$(find "$BUILD_DIR" -maxdepth 1 -type d -name "ryu-*" | head -n 1)
+            
+            if [ -n "$EXTRACTED_DIR" ] && [ -f "$EXTRACTED_DIR/ryu/hooks.py" ]; then
+                # Patch hooks.py: Comment out the line triggering the error
+                # _main_module()._orig_get_script_args = easy_install.get_script_args
+                sed -i 's/.*easy_install.get_script_args.*/# & # Patched by start.sh for Python 3.12+/' "$EXTRACTED_DIR/ryu/hooks.py"
+                
+                # Install from patched source
+                echo -e "${YELLOW}   Installing patched Ryu...${NC}"
+                if $pip_cmd install $user_flag "$EXTRACTED_DIR" eventlet==0.30.2 2>&1 | tee -a logs/ryu_install.log; then
+                    echo -e "${GREEN}   Ryu installed successfully from patched source${NC}"
+                else
+                    echo -e "${RED}   Failed to install patched Ryu. Check logs/ryu_install.log${NC}"
                 fi
-            done
+            else
+                echo -e "${RED}   Failed to find Ryu source or hooks.py in $BUILD_DIR${NC}"
+                # Fallback to standard install attempt
+                 $pip_cmd install $user_flag ryu eventlet==0.30.2 || true
+            fi
+            
+            # Cleanup
+            rm -rf "$BUILD_DIR"
+        else
+            echo -e "${RED}   Failed to download Ryu source. Attempting standard install...${NC}"
+             $pip_cmd install $user_flag ryu eventlet==0.30.2 || true
         fi
     else
         # Python < 3.12, standard installation
