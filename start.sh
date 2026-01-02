@@ -186,6 +186,9 @@ ask_mininet() {
 # START SERVICES
 # ==========================
 
+# Create logs directory
+mkdir -p logs
+
 # 1. Flask Controller
 echo -e "${BLUE}Starting Flask Controller...${NC}"
 nohup $PYTHON_CMD controller.py > logs/controller.log 2>&1 &
