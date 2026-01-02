@@ -157,7 +157,7 @@ $PIP_CMD install --quiet -r requirements.txt
 # Re-install Ryu with no-build-isolation to respect pinned setuptools 58.0.0
 # This is critical for compatibility
 echo -e "${BLUE}Ensuring Ryu installation compatibility...${NC}"
-$PIP_CMD install --quiet --no-build-isolation ryu eventlet==0.33.3
+$PIP_CMD install --quiet --no-build-isolation ryu eventlet==0.30.2
 
 # ==========================
 # ASK MININET
