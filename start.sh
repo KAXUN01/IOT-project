@@ -79,7 +79,31 @@ trap cleanup SIGINT SIGTERM
 # ==========================
 # SYSTEM DEPENDENCIES & DOCKER
 # ==========================
-# Auto-install Docker if missing
+echo -e "${BLUE}Checking system dependencies...${NC}"
+
+# 1. Install System Packages (Python 3.8, Build Tools)
+if command -v apt-get &> /dev/null; then
+    # Only try to install if we have sudo or are root
+    if [ "$EUID" -eq 0 ] || command -v sudo &> /dev/null; then
+         # Check for critical build dependencies
+         if ! dpkg -s python3.8-venv build-essential libssl-dev libffi-dev &> /dev/null; then
+            echo -e "${YELLOW}Installing critical system dependencies (Python headers, build tools)...${NC}"
+            # Add deadsnakes PPA if python3.8 is missing
+            if ! command -v python3.8 &> /dev/null; then
+                sudo apt-get update -qq
+                sudo apt-get install -y software-properties-common -qq
+                sudo add-apt-repository ppa:deadsnakes/ppa -y
+            fi
+            
+            sudo apt-get update -qq
+            sudo apt-get install -y python3.8 python3.8-venv python3.8-dev \
+                                    build-essential libssl-dev libffi-dev \
+                                    curl net-tools
+         fi
+    fi
+fi
+
+# 2. Auto-install Docker if missing
 if ! command -v docker &> /dev/null; then
     echo -e "${YELLOW}Docker not found. Attempting automatic installation...${NC}"
     if command -v curl &> /dev/null; then
@@ -111,7 +135,12 @@ fi
 
 if [ ! -d venv ]; then
   echo -e "${YELLOW}Creating Python 3.8 virtual environment...${NC}"
-  python3.8 -m venv venv || exit 1
+  # Ensure pip is installed
+  python3.8 -m venv venv || {
+     echo -e "${RED}Failed to create venv. Is python3.8-venv installed?${NC}"
+     echo -e "${YELLOW}Try: sudo apt-get install python3.8-venv${NC}"
+     exit 1
+  }
 fi
 
 PYTHON_CMD="./venv/bin/python"
@@ -136,11 +165,19 @@ $PIP_CMD install --quiet --no-build-isolation ryu eventlet==0.33.3
 ask_mininet() {
   if [ "$NO_MININET" = true ]; then return 1; fi
   if [ "$WITH_MININET" = true ]; then return 0; fi
+  
+  # Always ask if no flags provided, even if not strictly interactive (fallback safety)
   if [ -t 0 ]; then
-    echo -e "${YELLOW}Start virtual IoT test devices (Mininet)? [y/N]${NC}"
+    echo ""
+    echo -e "${YELLOW}======================================================${NC}"
+    echo -e "${YELLOW}   VIRTUAL IoT DEVICE SIMULATION (MININET)            ${NC}"
+    echo -e "${YELLOW}======================================================${NC}"
+    echo -e "${BLUE}Do you want to start virtual IoT test devices? [y/N]${NC}"
+    echo -e "${BLUE}(Requires sudo privileges)${NC}"
     read -r ans
-    [[ "$ans" =~ ^[Yy]$ ]]
-    return
+    if [[ "$ans" =~ ^[Yy]$ ]]; then
+        return 0
+    fi
   fi
   return 1
 }
