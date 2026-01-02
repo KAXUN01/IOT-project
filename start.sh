@@ -367,13 +367,30 @@ install_python_deps() {
     PY_MINOR=$($PYTHON_CMD -c "import sys; print(sys.version_info.minor)")
     if [ "$PY_MINOR" -ge 12 ]; then
         echo -e "${YELLOW}   Python 3.12+ detected, applying Ryu compatibility fix...${NC}"
-        # Pin setuptools to version that still has easy_install.get_script_args
-        $pip_cmd install $user_flag "setuptools<70" --quiet 2>/dev/null
-    fi
-    
-    if ! $pip_cmd install $user_flag ryu eventlet==0.30.2; then
-        echo -e "${RED}   Failed to install Ryu. Trying without user flag...${NC}"
-        $pip_cmd install ryu eventlet==0.30.2 || echo -e "${RED}   Ryu installation failed${NC}"
+        # Pin setuptools to known compatible version (58.2.0 is the last version before namespace changes)
+        # Also install wheel to ensure proper build support
+        $pip_cmd install $user_flag "setuptools==58.2.0" "wheel" --quiet 2>/dev/null
+        
+        # Install Ryu with --no-build-isolation to use our pinned setuptools
+        echo -e "${YELLOW}   Installing Ryu with build isolation disabled...${NC}"
+        if ! $pip_cmd install $user_flag --no-build-isolation ryu eventlet==0.30.2 2>&1 | tee -a logs/ryu_install.log; then
+            echo -e "${RED}   Failed to install Ryu with --no-build-isolation. Trying alternative method...${NC}"
+            # Fallback: Try with different setuptools versions
+            for version in "57.5.0" "56.0.0" "45.0.0"; do
+                echo -e "${YELLOW}   Trying setuptools $version...${NC}"
+                $pip_cmd install $user_flag "setuptools==$version" --quiet 2>/dev/null
+                if $pip_cmd install $user_flag --no-build-isolation ryu eventlet==0.30.2 2>&1 | tee -a logs/ryu_install.log; then
+                    echo -e "${GREEN}   Ryu installed successfully with setuptools $version${NC}"
+                    break
+                fi
+            done
+        fi
+    else
+        # Python < 3.12, standard installation
+        if ! $pip_cmd install $user_flag ryu eventlet==0.30.2; then
+            echo -e "${RED}   Failed to install Ryu. Trying without user flag...${NC}"
+            $pip_cmd install ryu eventlet==0.30.2 || echo -e "${RED}   Ryu installation failed${NC}"
+        fi
     fi
     
     # Install other dependencies
