@@ -674,10 +674,19 @@ def get_data():
         device_packet_counts = [t for t in packet_counts[device] if current_time - t <= 60]
         rate_limit_status = f"{len(device_packet_counts)}/{RATE_LIMIT}"
         blocked_reason = "Maintenance window" if is_maintenance_window() else None
+        
+        # Get last_seen timestamp for the device
+        device_last_seen = last_seen.get(device, 0)
+        
+        # Calculate packets per minute
+        packets_per_minute = len(device_packet_counts)
+        
         data[device] = {
             "packets": packet_count,
             "rate_limit_status": rate_limit_status,
-            "blocked_reason": blocked_reason
+            "blocked_reason": blocked_reason,
+            "last_seen": device_last_seen,
+            "packets_per_minute": packets_per_minute
         }
     return json.dumps(data)
 

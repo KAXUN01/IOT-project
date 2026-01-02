@@ -1904,8 +1904,33 @@
             Object.entries(data).forEach(([deviceId, info]) => {
                 const packetsEl = document.getElementById(`packets-${deviceId}`);
                 const rateLimitEl = document.getElementById(`rate-limit-${deviceId}`);
+                const packetsPerMinEl = document.getElementById(`packets-per-min-${deviceId}`);
+                const lastSeenEl = document.getElementById(`last-seen-${deviceId}`);
+
                 if (packetsEl) packetsEl.textContent = info.packets;
                 if (rateLimitEl) rateLimitEl.textContent = info.rate_limit_status;
+                if (packetsPerMinEl) packetsPerMinEl.textContent = info.packets_per_minute || 0;
+
+                // Format last_seen as a readable timestamp
+                if (lastSeenEl) {
+                    if (info.last_seen && info.last_seen > 0) {
+                        const lastSeenDate = new Date(info.last_seen * 1000);
+                        const now = new Date();
+                        const diffSeconds = Math.floor((now - lastSeenDate) / 1000);
+
+                        if (diffSeconds < 60) {
+                            lastSeenEl.textContent = `${diffSeconds}s ago`;
+                        } else if (diffSeconds < 3600) {
+                            lastSeenEl.textContent = `${Math.floor(diffSeconds / 60)}m ago`;
+                        } else if (diffSeconds < 86400) {
+                            lastSeenEl.textContent = `${Math.floor(diffSeconds / 3600)}h ago`;
+                        } else {
+                            lastSeenEl.textContent = lastSeenDate.toLocaleString();
+                        }
+                    } else {
+                        lastSeenEl.textContent = '--';
+                    }
+                }
             });
         }
 
