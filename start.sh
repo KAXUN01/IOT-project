@@ -212,6 +212,67 @@ install_system_deps() {
 install_system_deps
 
 # ============================================================================
+# PYTHON VERSION COMPATIBILITY CHECK & AUTO-INSTALLATION
+# ============================================================================
+
+echo -e "${BLUE}Checking Python version compatibility...${NC}"
+
+# Check current Python 3 version
+if command -v python3 &> /dev/null; then
+    CURRENT_PY_VERSION=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+    CURRENT_PY_MINOR=$(python3 -c "import sys; print(sys.version_info.minor)")
+    echo -e "${GREEN}System Python: $CURRENT_PY_VERSION${NC}"
+    
+    # Ryu has compatibility issues with Python 3.12+
+    # Automatically install Python 3.11 if needed
+    if [ "$CURRENT_PY_MINOR" -ge 12 ]; then
+        echo -e "${YELLOW}Python 3.12+ detected. Ryu SDN Controller requires Python 3.11 or earlier.${NC}"
+        
+        # Check if Python 3.11 is already installed
+        if command -v python3.11 &> /dev/null; then
+            echo -e "${GREEN}Python 3.11 found, will use it for compatibility${NC}"
+            PYTHON_BASE_CMD="python3.11"
+        else
+            echo -e "${YELLOW}Installing Python 3.11 for compatibility...${NC}"
+            
+            # Install Python 3.11 from deadsnakes PPA (Ubuntu/Debian)
+            if command -v apt-get &> /dev/null; then
+                # Add deadsnakes PPA
+                if ! grep -q "deadsnakes/ppa" /etc/apt/sources.list /etc/apt/sources.list.d/* 2>/dev/null; then
+                    echo -e "${YELLOW}   Adding deadsnakes PPA...${NC}"
+                    sudo apt-get install -y software-properties-common -qq
+                    sudo add-apt-repository ppa:deadsnakes/ppa -y
+                    sudo apt-get update -qq
+                fi
+                
+                # Install Python 3.11 and related packages
+                echo -e "${YELLOW}   Installing Python 3.11...${NC}"
+                sudo apt-get install -y python3.11 python3.11-venv python3.11-dev -qq
+                
+                if command -v python3.11 &> /dev/null; then
+                    echo -e "${GREEN}   Python 3.11 installed successfully${NC}"
+                    PYTHON_BASE_CMD="python3.11"
+                else
+                    echo -e "${RED}   Failed to install Python 3.11${NC}"
+                    echo -e "${RED}   Continuing with Python $CURRENT_PY_VERSION (may have compatibility issues)${NC}"
+                    PYTHON_BASE_CMD="python3"
+                fi
+            else
+                echo -e "${YELLOW}   Non-Debian system detected. Please install Python 3.11 manually.${NC}"
+                echo -e "${YELLOW}   Continuing with Python $CURRENT_PY_VERSION (may have compatibility issues)${NC}"
+                PYTHON_BASE_CMD="python3"
+            fi
+        fi
+    else
+        echo -e "${GREEN}Python version is compatible with Ryu${NC}"
+        PYTHON_BASE_CMD="python3"
+    fi
+else
+    echo -e "${RED}Python 3 not found!${NC}"
+    exit 1
+fi
+
+# ============================================================================
 # PYTHON ENVIRONMENT SETUP
 # ============================================================================
 
@@ -240,17 +301,17 @@ setup_venv() {
         echo -e "${GREEN}Virtual environment found${NC}"
         PYTHON_CMD="./venv/bin/python3"
         if [ ! -f "$PYTHON_CMD" ]; then
-            PYTHON_CMD="python3"
+            PYTHON_CMD="$PYTHON_BASE_CMD"
         fi
     else
-        echo -e "${YELLOW}Creating virtual environment...${NC}"
-        python3 -m venv venv
+        echo -e "${YELLOW}Creating virtual environment with $PYTHON_BASE_CMD...${NC}"
+        $PYTHON_BASE_CMD -m venv venv
         if [ $? -eq 0 ]; then
             echo -e "${GREEN}Virtual environment created${NC}"
             PYTHON_CMD="./venv/bin/python3"
         else
             echo -e "${YELLOW}Could not create venv, using system Python${NC}"
-            PYTHON_CMD="python3"
+            PYTHON_CMD="$PYTHON_BASE_CMD"
         fi
     fi
     
@@ -298,7 +359,18 @@ install_python_deps() {
     $pip_cmd install $user_flag --upgrade Flask requests cryptography pyOpenSSL --quiet 2>/dev/null
     
     # Install Ryu and eventlet with compatible version (critical)
+    # NOTE: Ryu 4.34 is incompatible with Python 3.12+ due to setuptools changes
+    # We need to pin setuptools to an older version first, then install ryu
     echo -e "${YELLOW}   Installing Ryu SDN Controller...${NC}"
+    
+    # Check Python version for compatibility workaround
+    PY_MINOR=$($PYTHON_CMD -c "import sys; print(sys.version_info.minor)")
+    if [ "$PY_MINOR" -ge 12 ]; then
+        echo -e "${YELLOW}   Python 3.12+ detected, applying Ryu compatibility fix...${NC}"
+        # Pin setuptools to version that still has easy_install.get_script_args
+        $pip_cmd install $user_flag "setuptools<70" --quiet 2>/dev/null
+    fi
+    
     if ! $pip_cmd install $user_flag ryu eventlet==0.30.2; then
         echo -e "${RED}   Failed to install Ryu. Trying without user flag...${NC}"
         $pip_cmd install ryu eventlet==0.30.2 || echo -e "${RED}   Ryu installation failed${NC}"
