@@ -280,9 +280,9 @@ install_python_deps() {
         exit 1
     fi
     
-    # Determine if we should use --user flag (only if not in venv)
+    # Determine if we should use --user flag (only if not in venv AND not root)
     user_flag=""
-    if [ ! -d "venv" ]; then
+    if [ ! -d "venv" ] && [ "$EUID" -ne 0 ]; then
         user_flag="--user"
     fi
     
@@ -299,7 +299,10 @@ install_python_deps() {
     
     # Install Ryu and eventlet with compatible version (critical)
     echo -e "${YELLOW}   Installing Ryu SDN Controller...${NC}"
-    $pip_cmd install $user_flag ryu eventlet==0.30.2 --quiet 2>/dev/null
+    if ! $pip_cmd install $user_flag ryu eventlet==0.30.2; then
+        echo -e "${RED}   Failed to install Ryu. Trying without user flag...${NC}"
+        $pip_cmd install ryu eventlet==0.30.2 || echo -e "${RED}   Ryu installation failed${NC}"
+    fi
     
     # Install other dependencies
     echo -e "${YELLOW}   Installing remaining dependencies...${NC}"
