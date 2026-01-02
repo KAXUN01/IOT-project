@@ -359,15 +359,32 @@ install_python_deps() {
     $pip_cmd install $user_flag --upgrade Flask requests cryptography pyOpenSSL --quiet 2>/dev/null
     
     # Install Ryu and eventlet with compatible version (critical)
+    # NOTE: Ryu 4.34 requires older setuptools (< 60.0) due to easy_install.get_script_args removal
+    # We must: 1) Pin setuptools, 2) Use --no-build-isolation to prevent pip from using new setuptools
     echo -e "${YELLOW}   Installing Ryu SDN Controller...${NC}"
     
-    # Create logs directory if it doesn't exist (needed for logging installation)
+    # Create logs directory if it doesn't exist
     mkdir -p logs
     
-    # Standard installation (Python 3.8 has no compatibility issues)
-    if ! $pip_cmd install $user_flag ryu eventlet==0.30.2; then
-        echo -e "${RED}   Failed to install Ryu. Trying without user flag...${NC}"
-        $pip_cmd install ryu eventlet==0.30.2 || echo -e "${RED}   Ryu installation failed${NC}"
+    # First, force pin setuptools to a compatible version - check if it's already correct
+    CURRENT_SETUPTOOLS=$($pip_cmd show setuptools 2>/dev/null | grep Version | cut -d' ' -f2)
+    if [ "$CURRENT_SETUPTOOLS" != "58.0.0" ]; then
+        echo -e "${YELLOW}   Pinning setuptools to version 58.0.0 (current: $CURRENT_SETUPTOOLS)...${NC}"
+        $pip_cmd install $user_flag "setuptools==58.0.0" "wheel" --force-reinstall 
+    fi
+    
+    # Verify setuptools is actually pinned
+    $pip_cmd show setuptools | grep Version
+    
+    # Install Ryu with --no-build-isolation to use the pinned setuptools
+    # We explicitly suppress the new pip version warning to keep output clean, but let errors show
+    if ! $pip_cmd install $user_flag --no-build-isolation ryu eventlet==0.30.2; then
+        echo -e "${RED}   Failed to install Ryu via PyPI.${NC}"
+        echo -e "${YELLOW}   Trying alternative: installing from GitHub...${NC}"
+        # Fallback: try installing from osrg/ryu GitHub (maintained fork)
+        if ! $pip_cmd install $user_flag --no-build-isolation git+https://github.com/faucetsdn/ryu.git eventlet==0.30.2; then
+             echo -e "${RED}   Ryu installation failed completely.${NC}"
+        fi
     fi
     
     # Install other dependencies
