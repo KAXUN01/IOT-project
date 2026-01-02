@@ -232,17 +232,48 @@ fi
 # 4. Honeypot Deployment
 if command -v docker &>/dev/null; then
     echo -e "${BLUE}Deploying Honeypot...${NC}"
-    if $PYTHON_CMD -c "from honeypot_manager.honeypot_deployer import HoneypotDeployer; print(f'DEPLOY_RESULT:{HoneypotDeployer().deploy()}')" 2>&1 | grep -q "DEPLOY_RESULT:True"; then
-        HONEYPOT_CONTAINER="iot_honeypot_cowrie"
-        echo -e "${GREEN}Honeypot deployed: $HONEYPOT_CONTAINER${NC}"
-    else
-         # Fallback check
-        if docker ps --format "{{.Names}}" 2>/dev/null | grep -q "iot_honeypot"; then
-            HONEYPOT_CONTAINER=$(docker ps --format "{{.Names}}" 2>/dev/null | grep "iot_honeypot" | head -1)
-            echo -e "${GREEN}Honeypot container found running: $HONEYPOT_CONTAINER${NC}"
-        else
-            echo -e "${YELLOW}Honeypot deployment failed (check logs)${NC}"
+    
+    # Ensure Docker daemon is running
+    if ! docker info &>/dev/null; then
+        echo -e "${YELLOW}Starting Docker daemon...${NC}"
+        sudo systemctl start docker 2>/dev/null || sudo service docker start 2>/dev/null || true
+        sleep 3
+    fi
+    
+    # Check Docker is now available
+    if docker info &>/dev/null; then
+        # Create honeypot data directory
+        mkdir -p honeypot_data/cowrie
+        
+        # Pull Cowrie image if not present
+        if ! docker images cowrie/cowrie --format "{{.Repository}}" 2>/dev/null | grep -q "cowrie"; then
+            echo -e "${YELLOW}Pulling Cowrie honeypot image (this may take a moment)...${NC}"
+            docker pull cowrie/cowrie:latest
         fi
+        
+        # Deploy using Python module
+        if $PYTHON_CMD -c "from honeypot_manager.honeypot_deployer import HoneypotDeployer; print(f'DEPLOY_RESULT:{HoneypotDeployer().deploy()}')" 2>&1 | grep -q "DEPLOY_RESULT:True"; then
+            HONEYPOT_CONTAINER="iot_honeypot_cowrie"
+            echo -e "${GREEN}Honeypot deployed: $HONEYPOT_CONTAINER${NC}"
+        else
+            # Fallback: try direct docker run
+            if ! docker ps --format "{{.Names}}" 2>/dev/null | grep -q "iot_honeypot"; then
+                echo -e "${YELLOW}Trying direct Docker deployment...${NC}"
+                docker run -d --name iot_honeypot_cowrie \
+                    -p 2222:2222 -p 8080:8080 \
+                    -v "$(pwd)/honeypot_data/cowrie:/data" \
+                    cowrie/cowrie:latest 2>/dev/null && HONEYPOT_CONTAINER="iot_honeypot_cowrie"
+            fi
+            
+            if docker ps --format "{{.Names}}" 2>/dev/null | grep -q "iot_honeypot"; then
+                HONEYPOT_CONTAINER=$(docker ps --format "{{.Names}}" 2>/dev/null | grep "iot_honeypot" | head -1)
+                echo -e "${GREEN}Honeypot container running: $HONEYPOT_CONTAINER${NC}"
+            else
+                echo -e "${YELLOW}Honeypot deployment failed (Docker may need configuration)${NC}"
+            fi
+        fi
+    else
+        echo -e "${YELLOW}Docker daemon not running, skipping honeypot${NC}"
     fi
 fi
 
