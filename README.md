@@ -396,11 +396,12 @@ See `docs/deployment_guide.md` for detailed instructions.
 
 ## 📚 Documentation
 
-- **Architecture**: `docs/ARCHITECTURE.md` - Complete system architecture
-- **Implementation Features**: `docs/IMPLEMENTATION_FEATURES.md` - New features documentation
-- **Heuristic-Deception System**: `docs/HEURISTIC_DECEPTION.md` - Complete guide on anomaly detection and honeypot integration
-- **Deployment Guide**: `docs/deployment_guide.md` - Raspberry Pi deployment
-- **Real-World Deployment**: `docs/REAL_WORLD_DEPLOYMENT.md` - Hardware setup guide
+Comprehensive documentation organized by topic:
+
+- **[Complete Guide](docs/COMPLETE_GUIDE.md)** - Architecture, features, implementation, and API reference
+- **[Device Onboarding](docs/DEVICE_ONBOARDING.md)** - Automatic WiFi detection and secure PKI onboarding workflows
+- **[Security Features](docs/SECURITY_FEATURES.md)** - Zero Trust, dynamic trust scoring, heuristic-deception loop, threat detection
+- **[Deployment Guide](docs/DEPLOYMENT_GUIDE.md)** - Raspberry Pi, cloud, and ESP32 hardware setup
 
 ---
 
