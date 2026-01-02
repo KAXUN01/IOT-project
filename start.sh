@@ -223,19 +223,19 @@ if command -v python3 &> /dev/null; then
     CURRENT_PY_MINOR=$(python3 -c "import sys; print(sys.version_info.minor)")
     echo -e "${GREEN}System Python: $CURRENT_PY_VERSION${NC}"
     
-    # Ryu has compatibility issues with Python 3.12+
-    # Automatically install Python 3.11 if needed
-    if [ "$CURRENT_PY_MINOR" -ge 12 ]; then
-        echo -e "${YELLOW}Python 3.12+ detected. Ryu SDN Controller requires Python 3.11 or earlier.${NC}"
+    # Ryu has best compatibility with Python 3.8-3.10
+    # Automatically install Python 3.8 if using incompatible version
+    if [ "$CURRENT_PY_MINOR" -ge 12 ] || [ "$CURRENT_PY_MINOR" -le 7 ]; then
+        echo -e "${YELLOW}Python $CURRENT_PY_VERSION detected. Ryu SDN Controller works best with Python 3.8.${NC}"
         
-        # Check if Python 3.11 is already installed
-        if command -v python3.11 &> /dev/null; then
-            echo -e "${GREEN}Python 3.11 found, will use it for compatibility${NC}"
-            PYTHON_BASE_CMD="python3.11"
+        # Check if Python 3.8 is already installed
+        if command -v python3.8 &> /dev/null; then
+            echo -e "${GREEN}Python 3.8 found, will use it for compatibility${NC}"
+            PYTHON_BASE_CMD="python3.8"
         else
-            echo -e "${YELLOW}Installing Python 3.11 for compatibility...${NC}"
+            echo -e "${YELLOW}Installing Python 3.8 for compatibility...${NC}"
             
-            # Install Python 3.11 from deadsnakes PPA (Ubuntu/Debian)
+            # Install Python 3.8 from deadsnakes PPA (Ubuntu/Debian)
             if command -v apt-get &> /dev/null; then
                 # Add deadsnakes PPA
                 if ! grep -q "deadsnakes/ppa" /etc/apt/sources.list /etc/apt/sources.list.d/* 2>/dev/null; then
@@ -245,20 +245,20 @@ if command -v python3 &> /dev/null; then
                     sudo apt-get update -qq
                 fi
                 
-                # Install Python 3.11 and related packages
-                echo -e "${YELLOW}   Installing Python 3.11...${NC}"
-                sudo apt-get install -y python3.11 python3.11-venv python3.11-dev -qq
+                # Install Python 3.8 and related packages
+                echo -e "${YELLOW}   Installing Python 3.8...${NC}"
+                sudo apt-get install -y python3.8 python3.8-venv python3.8-dev -qq
                 
-                if command -v python3.11 &> /dev/null; then
-                    echo -e "${GREEN}   Python 3.11 installed successfully${NC}"
-                    PYTHON_BASE_CMD="python3.11"
+                if command -v python3.8 &> /dev/null; then
+                    echo -e "${GREEN}   Python 3.8 installed successfully${NC}"
+                    PYTHON_BASE_CMD="python3.8"
                 else
-                    echo -e "${RED}   Failed to install Python 3.11${NC}"
+                    echo -e "${RED}   Failed to install Python 3.8${NC}"
                     echo -e "${RED}   Continuing with Python $CURRENT_PY_VERSION (may have compatibility issues)${NC}"
                     PYTHON_BASE_CMD="python3"
                 fi
             else
-                echo -e "${YELLOW}   Non-Debian system detected. Please install Python 3.11 manually.${NC}"
+                echo -e "${YELLOW}   Non-Debian system detected. Please install Python 3.8 manually.${NC}"
                 echo -e "${YELLOW}   Continuing with Python $CURRENT_PY_VERSION (may have compatibility issues)${NC}"
                 PYTHON_BASE_CMD="python3"
             fi
@@ -359,61 +359,15 @@ install_python_deps() {
     $pip_cmd install $user_flag --upgrade Flask requests cryptography pyOpenSSL --quiet 2>/dev/null
     
     # Install Ryu and eventlet with compatible version (critical)
-    # NOTE: Ryu 4.34 is incompatible with Python 3.12+ due to setuptools changes
-    # We navigate this by patching Ryu's build hooks to remove the deprecated easy_install call.
     echo -e "${YELLOW}   Installing Ryu SDN Controller...${NC}"
     
     # Create logs directory if it doesn't exist (needed for logging installation)
     mkdir -p logs
     
-    # Check Python version for compatibility workaround
-    PY_MINOR=$($PYTHON_CMD -c "import sys; print(sys.version_info.minor)")
-    if [ "$PY_MINOR" -ge 12 ]; then
-        echo -e "${YELLOW}   Python 3.12+ detected, applying Ryu compatibility fix (patching source)...${NC}"
-        
-        # Create temporary build directory
-        BUILD_DIR="/tmp/ryu_build_$(date +%s)"
-        mkdir -p "$BUILD_DIR"
-        
-        echo -e "${YELLOW}   Downloading Ryu source...${NC}"
-        if $pip_cmd download --no-deps --no-binary :all: --dest "$BUILD_DIR" "ryu>=4.34" --quiet 2>/dev/null; then
-            # Extract tarball
-            echo -e "${YELLOW}   Patching Ryu source...${NC}"
-            tar xzf "$BUILD_DIR"/ryu-*.tar.gz -C "$BUILD_DIR"
-            
-            # Find the extracted directory
-            EXTRACTED_DIR=$(find "$BUILD_DIR" -maxdepth 1 -type d -name "ryu-*" | head -n 1)
-            
-            if [ -n "$EXTRACTED_DIR" ] && [ -f "$EXTRACTED_DIR/ryu/hooks.py" ]; then
-                # Patch hooks.py: Comment out the line triggering the error
-                # _main_module()._orig_get_script_args = easy_install.get_script_args
-                sed -i 's/.*easy_install.get_script_args.*/# & # Patched by start.sh for Python 3.12+/' "$EXTRACTED_DIR/ryu/hooks.py"
-                
-                # Install from patched source
-                echo -e "${YELLOW}   Installing patched Ryu...${NC}"
-                if $pip_cmd install $user_flag "$EXTRACTED_DIR" eventlet==0.30.2 2>&1 | tee -a logs/ryu_install.log; then
-                    echo -e "${GREEN}   Ryu installed successfully from patched source${NC}"
-                else
-                    echo -e "${RED}   Failed to install patched Ryu. Check logs/ryu_install.log${NC}"
-                fi
-            else
-                echo -e "${RED}   Failed to find Ryu source or hooks.py in $BUILD_DIR${NC}"
-                # Fallback to standard install attempt
-                 $pip_cmd install $user_flag ryu eventlet==0.30.2 || true
-            fi
-            
-            # Cleanup
-            rm -rf "$BUILD_DIR"
-        else
-            echo -e "${RED}   Failed to download Ryu source. Attempting standard install...${NC}"
-             $pip_cmd install $user_flag ryu eventlet==0.30.2 || true
-        fi
-    else
-        # Python < 3.12, standard installation
-        if ! $pip_cmd install $user_flag ryu eventlet==0.30.2; then
-            echo -e "${RED}   Failed to install Ryu. Trying without user flag...${NC}"
-            $pip_cmd install ryu eventlet==0.30.2 || echo -e "${RED}   Ryu installation failed${NC}"
-        fi
+    # Standard installation (Python 3.8 has no compatibility issues)
+    if ! $pip_cmd install $user_flag ryu eventlet==0.30.2; then
+        echo -e "${RED}   Failed to install Ryu. Trying without user flag...${NC}"
+        $pip_cmd install ryu eventlet==0.30.2 || echo -e "${RED}   Ryu installation failed${NC}"
     fi
     
     # Install other dependencies
