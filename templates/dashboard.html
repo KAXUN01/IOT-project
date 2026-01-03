@@ -1704,6 +1704,34 @@
                                 background: '#ef5350'
                             }
                         }
+                    },
+                    revoked: {
+                        color: {
+                            border: '#8b0000',
+                            background: '#dc143c',
+                            highlight: {
+                                border: '#8b0000',
+                                background: '#ff4747'
+                            },
+                            hover: {
+                                border: '#8b0000',
+                                background: '#ff4747'
+                            }
+                        }
+                    },
+                    honeypot: {
+                        color: {
+                            border: '#ff8c00',
+                            background: '#ffd700',
+                            highlight: {
+                                border: '#ff8c00',
+                                background: '#ffed4e'
+                            },
+                            hover: {
+                                border: '#ff8c00',
+                                background: '#ffed4e'
+                            }
+                        }
                     }
                 }
             };
@@ -1935,9 +1963,42 @@
         }
 
         function updateTopology(data) {
-            // Enhanced topology processing: set group based on status and connection
+            // Enhanced topology processing: set group based on status, connection, and honeypot status
             const nodes = data.nodes.map(node => {
-                // Check if device is connected (has an edge or is online/active)
+                // Check if device is revoked
+                if (node.status === 'revoked') {
+                    return {
+                        ...node,
+                        group: 'revoked',
+                        title: `${node.label}<br>Status: REVOKED<br>Connection: Disconnected<br>Last Seen: ${new Date(node.last_seen * 1000).toLocaleTimeString()}`,
+                        size: node.type === 'gateway' ? 40 : 30,
+                        font: {
+                            size: 14,
+                            color: '#ffffff',
+                            face: 'Inter'
+                        }
+                    };
+                }
+                
+                // Check if device is redirected to honeypot
+                if (node.honeypot_redirected) {
+                    return {
+                        ...node,
+                        group: 'honeypot',
+                        title: `${node.label}<br>Status: HONEYPOT REDIRECTED<br>Connection: ${node.online ? 'Connected' : 'Disconnected'}<br>Last Seen: ${new Date(node.last_seen * 1000).toLocaleTimeString()}`,
+                        size: node.type === 'gateway' ? 40 : 30,
+                        font: {
+                            size: 14,
+                            color: '#000000',
+                            face: 'Inter',
+                            bold: {
+                                color: '#000000'
+                            }
+                        }
+                    };
+                }
+                
+                // Regular device logic: green for connected/active devices, red for inactive
                 const isOnline = node.online === true || node.status === 'active';
                 const hasEdge = Array.isArray(data.edges) && data.edges.some(edge =>
                     edge.from === node.id || edge.to === node.id
@@ -2817,7 +2878,12 @@
                     .then(data => {
                         if (data.success) {
                             showAlert(`Certificate revoked for ${deviceId}`, 'success');
+                            // Refresh the certificate list
                             updateCertificates();
+                            // Refresh the network topology to show device disconnected
+                            fetch('/get_topology_with_mac')
+                                .then(response => response.json())
+                                .then(topologyData => updateTopology(topologyData));
                         } else {
                             showAlert(`Failed to revoke certificate: ${data.error}`, 'error');
                         }

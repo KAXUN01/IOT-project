@@ -724,6 +724,12 @@ def get_topology_with_mac():
         "edges": []
     }
     
+    # Build honeypot redirected device set for quick lookup
+    honeypot_devices = set()
+    for alert in suspicious_device_alerts:
+        if alert.get('redirected') and alert.get('device_id'):
+            honeypot_devices.add(alert['device_id'])
+    
     # Add gateway node (always online/connected)
     topology["nodes"].append({
         "id": "ESP32_Gateway",
@@ -733,7 +739,8 @@ def get_topology_with_mac():
         "status": "active",
         "type": "gateway",
         "last_seen": current_time,
-        "packets": 0
+        "packets": 0,
+        "honeypot_redirected": False
     })
     
     # Get devices from onboarding database if available
@@ -780,6 +787,9 @@ def get_topology_with_mac():
                device_info.get('mac_address') or 
                "Unknown")
         
+        # Check if device is redirected to honeypot
+        is_honeypot_redirected = device_id in honeypot_devices
+        
         topology["nodes"].append({
             "id": device_id,
             "label": device_id,
@@ -789,7 +799,8 @@ def get_topology_with_mac():
             "type": "device",
             "last_seen": last_seen_time,
             "packets": sum(device_data.get(device_id, [])),
-            "onboarded": device_id in devices_from_db
+            "onboarded": device_id in devices_from_db,
+            "honeypot_redirected": is_honeypot_redirected
         })
         
         # Show edge connection to gateway for all authorized/active devices
@@ -1979,7 +1990,7 @@ def get_certificates():
 @app.route('/api/certificates/<device_id>/revoke', methods=['POST'])
 def revoke_certificate(device_id):
     """
-    Revoke a device certificate
+    Revoke a device certificate and disconnect the device from network
     
     Args:
         device_id: Device identifier
@@ -2002,9 +2013,28 @@ def revoke_certificate(device_id):
                 except Exception as e:
                     app.logger.warning(f"Certificate manager revocation failed: {e}")
             
+            # Disconnect device from network by clearing tracking data
+            # This makes the device appear offline in the topology
+            if device_id in last_seen:
+                del last_seen[device_id]
+            
+            # Clear device token to invalidate any active sessions
+            if device_id in device_tokens:
+                del device_tokens[device_id]
+            
+            # Clear device data
+            if device_id in device_data:
+                del device_data[device_id]
+            
+            # Clear packet counts
+            if device_id in packet_counts:
+                del packet_counts[device_id]
+            
+            app.logger.info(f"Device {device_id} revoked and disconnected from network topology")
+            
             return jsonify({
                 'success': True,
-                'message': f'Certificate revoked for {device_id}'
+                'message': f'Certificate revoked and device {device_id} disconnected from network'
             }), 200
         else:
             return jsonify({
