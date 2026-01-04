@@ -5,7 +5,7 @@ Advanced IoT Security Framework with Software-Defined Networking
 
 import matplotlib
 matplotlib.use('Agg')
-from flask import Flask, request, render_template, send_file, jsonify
+from flask import Flask, request, render_template, send_file, jsonify, redirect, url_for
 import json
 import matplotlib.pyplot as plt
 import io
@@ -766,12 +766,10 @@ def update_auth():
         except Exception as e:
             app.logger.error(f"Failed to start mininet_topology.py: {e}")
 
-        return jsonify({
-            "status": "authorized",
-            "device_id": device_id,
-            "token": new_token,
-            "message": "Device re-authorized and fully restarted"
-        })
+        except Exception as e:
+            app.logger.error(f"Failed to start mininet_topology.py: {e}")
+
+        return redirect(url_for('dashboard'))
 
     elif action == 'revoke':
         authorized_devices[device_id] = False
@@ -786,7 +784,7 @@ def update_auth():
 
         app.logger.info(f"🛑 Device {device_id} hard-revoked")
     
-    return dashboard()
+    return redirect(url_for('dashboard'))
 
 @app.route('/update_policy', methods=['POST'])
 def update_policy():
