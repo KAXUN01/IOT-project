@@ -715,6 +715,24 @@ def update_auth():
             if action == 'authorize':
                 # Restore device status to 'active' in database
                 onboarding.identity_db.update_device_status(device_id, 'active')
+                
+                # Regenerate certificate if it was deleted during revocation
+                device_info = onboarding.identity_db.get_device(device_id)
+                if device_info:
+                    cert_path = device_info.get('certificate_path')
+                    mac_address = device_info.get('mac_address', 'Unknown')
+                    
+                    # Check if certificate file exists
+                    if not cert_path or not os.path.exists(cert_path):
+                        # Regenerate certificate
+                        try:
+                            new_cert_path, new_key_path = onboarding.cert_manager.generate_device_certificate(
+                                device_id, mac_address
+                            )
+                            app.logger.info(f"Certificate regenerated for {device_id}: {new_cert_path}")
+                        except Exception as cert_error:
+                            app.logger.error(f"Failed to regenerate certificate for {device_id}: {cert_error}")
+                
                 app.logger.info(f"Device {device_id} authorized and status restored to 'active'")
             elif action == 'revoke':
                 # Set device status to 'revoked' in database
