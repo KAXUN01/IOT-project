@@ -172,13 +172,24 @@ def initialize_test_devices():
             else:
                 # Device exists, ensure it has a trust score
                 current_score = onboarding.identity_db.get_trust_score(device_id)
-                if current_score is None:
+                
+                # Force update Sensor_A and Sensor_B to 70 if they are not 70
+                if device_id in ["Sensor_A", "Sensor_B"] and current_score != 70:
+                    onboarding.identity_db.save_trust_score(
+                        device_id=device_id,
+                        trust_score=70,
+                        reason="Enforcing trust score for test device"
+                    )
+                    print(f"✅ Trust score updated to 70 for device {device_id}")
+                elif current_score is None:
                     onboarding.identity_db.save_trust_score(
                         device_id=device_id,
                         trust_score=70,
                         reason="Setting initial trust score for existing device"
                     )
                     print(f"✅ Trust score set for existing device {device_id}")
+                
+
                 
                 # Sync database status with authorized_devices dict
                 # If device is in authorized_devices as True, ensure DB status is 'active'
