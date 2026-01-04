@@ -2066,6 +2066,9 @@ def revoke_certificate(device_id):
             if device_id in packet_counts:
                 del packet_counts[device_id]
             
+            # Update in-memory authorization status so Devices tab shows correct button
+            authorized_devices[device_id] = False
+            
             app.logger.info(f"Device {device_id} revoked and disconnected from network topology")
             
             return jsonify({
