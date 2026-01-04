@@ -179,6 +179,14 @@ def initialize_test_devices():
                         reason="Setting initial trust score for existing device"
                     )
                     print(f"✅ Trust score set for existing device {device_id}")
+                
+                # Sync database status with authorized_devices dict
+                # If device is in authorized_devices as True, ensure DB status is 'active'
+                if device_id in authorized_devices and authorized_devices[device_id]:
+                    db_status = existing_device.get('status', '')
+                    if db_status == 'revoked':
+                        onboarding.identity_db.update_device_status(device_id, 'active')
+                        print(f"✅ Device {device_id} status synced to 'active' (was revoked)")
                     
         except Exception as e:
             print(f"⚠️  Error initializing test device {device_id}: {e}")
