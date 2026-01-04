@@ -723,8 +723,29 @@ def update_auth():
         except Exception as e:
             app.logger.error(f"Failed to update device status in database: {e}")
     
-    if action == 'revoke' and device_id in device_tokens:
-        device_tokens.pop(device_id)
+    if action == 'authorize':
+        # Re-initialize tracking data structures for the device
+        # This allows the device to start fresh and be tracked properly
+        if device_id not in last_seen:
+            last_seen[device_id] = 0  # Will be updated when device sends data
+        if device_id not in device_data:
+            device_data[device_id] = []
+        if device_id not in packet_counts:
+            packet_counts[device_id] = []
+        app.logger.info(f"Device {device_id} tracking data re-initialized")
+        
+    elif action == 'revoke':
+        # Clear all tracking data when revoking
+        if device_id in device_tokens:
+            device_tokens.pop(device_id)
+        if device_id in last_seen:
+            del last_seen[device_id]
+        if device_id in device_data:
+            del device_data[device_id]
+        if device_id in packet_counts:
+            del packet_counts[device_id]
+        app.logger.info(f"Device {device_id} tracking data cleared")
+    
     return dashboard()
 
 @app.route('/update_policy', methods=['POST'])
