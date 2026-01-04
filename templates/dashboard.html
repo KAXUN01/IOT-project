@@ -2879,29 +2879,23 @@
                         if (data.success) {
                             showAlert(`Certificate revoked for ${deviceId}`, 'success');
                             
-                            // Immediately remove device from network visualization
-                            if (network) {
-                                network.body.data.nodes.remove(deviceId);
-                                // Also remove any edges connected to this device
-                                const edgesToRemove = [];
-                                network.body.data.edges.get().forEach(edge => {
-                                    if (edge.from === deviceId || edge.to === deviceId) {
-                                        edgesToRemove.push(edge.id);
-                                    }
-                                });
-                                if (edgesToRemove.length > 0) {
-                                    network.body.data.edges.remove(edgesToRemove);
-                                }
-                            }
-                            
                             // Refresh the certificate list
                             updateCertificates();
                             
-                            // Also refresh the topology to ensure consistency
+                            // Refresh the topology to show device in red (revoked status)
                             fetch('/get_topology_with_mac')
                                 .then(response => response.json())
-                                .then(topologyData => updateTopology(topologyData))
-                                .catch(error => console.debug('Topology refresh failed:', error));
+                                .then(topologyData => {
+                                    // Update topology with the revoked device now showing in red
+                                    updateTopology(topologyData);
+                                    // Log for debugging
+                                    console.log(`Device ${deviceId} revoked and displayed in red in topology`);
+                                })
+                                .catch(error => {
+                                    console.error('Topology refresh failed:', error);
+                                    // Still update from cache
+                                    updateData();
+                                });
                         } else {
                             showAlert(`Failed to revoke certificate: ${data.error}`, 'error');
                         }

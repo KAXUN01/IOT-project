@@ -782,11 +782,6 @@ def get_topology_with_mac():
         device_info = devices_from_db.get(device_id, {})
         device_status = device_info.get('status', 'active' if online else 'inactive')
         
-        # Skip revoked devices - they should not appear in topology at all
-        if device_status == 'revoked':
-            app.logger.debug(f"Skipping revoked device {device_id} from topology")
-            continue
-        
         # Get MAC address (from database, mac_addresses dict, or default)
         mac = (mac_addresses.get(device_id) or 
                device_info.get('mac_address') or 
@@ -795,6 +790,8 @@ def get_topology_with_mac():
         # Check if device is redirected to honeypot
         is_honeypot_redirected = device_id in honeypot_devices
         
+        # Add device node to topology
+        # Revoked devices will still appear but be visually marked as revoked (red color)
         topology["nodes"].append({
             "id": device_id,
             "label": device_id,
@@ -808,11 +805,13 @@ def get_topology_with_mac():
             "honeypot_redirected": is_honeypot_redirected
         })
         
-        # Show edge connection to gateway for all authorized/active devices
-        topology["edges"].append({
-            "from": device_id,
-            "to": "ESP32_Gateway"
-        })
+        # Show edge connection to gateway for active/authorized devices
+        # Skip edges for revoked devices (they show as disconnected)
+        if device_status != 'revoked':
+            topology["edges"].append({
+                "from": device_id,
+                "to": "ESP32_Gateway"
+            })
     
     return json.dumps(topology)
 

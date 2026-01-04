@@ -1,0 +1,209 @@
+═══════════════════════════════════════════════════════════════════════════════
+NETWORK TOPOLOGY VIEW FIX - REVOKED DEVICES IN RED
+═══════════════════════════════════════════════════════════════════════════════
+
+Date: January 4, 2026 - UPDATED
+Status: ✅ COMPLETE
+
+ISSUE FIXED:
+When a device certificate was revoked, it didn't show any visual indication of 
+revocation status in the network topology view.
+
+NEW SOLUTION:
+Revoked devices now appear in CRIMSON RED color in the network topology, making
+it clear which devices have been revoked. This provides:
+- Clear audit trail of revoked devices
+- Better visibility of device status
+- Professional appearance with color-coded status
+
+═══════════════════════════════════════════════════════════════════════════════
+CHANGES MADE:
+═══════════════════════════════════════════════════════════════════════════════
+
+1. BACKEND: controller.py
+   ─────────────────────────
+   
+   ✅ Lines 2006-2039: Revoke certificate and update device status
+      - Marks device status as 'revoked' in database
+      - Clears tracking dictionaries (last_seen, tokens, data, packet_counts)
+      - Prevents further communication from revoked device
+   
+   ✅ Lines 780-814: Include revoked devices in topology with red styling
+      - Includes revoked devices as nodes in network topology
+      - Device status = 'revoked' is returned to frontend
+      - No edges to gateway (device appears disconnected)
+      - Prevents normal data flow while keeping device visible
+
+
+2. FRONTEND: templates/dashboard.html
+   ──────────────────────────────────
+   
+   ✅ Lines 1685-1710: Revoked device group styling
+      - Crimson red background color: #dc143c
+      - Dark red border: #8b0000
+      - Highlight color: #ff4747
+      - Clear visual distinction from active devices
+   
+   ✅ Lines 1968-1982: Status detection in updateTopology()
+      - Checks if node.status === 'revoked'
+      - Assigns 'revoked' group for red styling
+      - Sets proper tooltip showing "Status: REVOKED"
+   
+   ✅ Lines 2879-2908: Enhanced revokeCertificate() function
+      - Calls /api/certificates/{deviceId}/revoke
+      - Fetches updated topology
+      - Shows device in red color immediately
+      - Updates certificate list
+
+═══════════════════════════════════════════════════════════════════════════════
+HOW IT WORKS:
+═══════════════════════════════════════════════════════════════════════════════
+
+DEVICE STATUS COLOR CODING:
+───────────────────────────
+
+🟢 GREEN (Active/Online):
+   - Connected to gateway with blue line
+   - Status: Active or Online
+   - Can send/receive data
+
+🔴 RED (Inactive/Offline):
+   - NOT connected to gateway
+   - No data exchange
+   - May reconnect later
+
+🔴 CRIMSON RED (Revoked):
+   - Darker red than inactive (#dc143c)
+   - NOT connected to gateway
+   - Cannot reconnect
+   - Certificate invalid
+   - Permanent disconnection
+
+🟡 GOLD (Honeypot Redirected):
+   - Special suspicious device status
+   - Appears in yellow highlight
+
+TOPOLOGY VIEW EXAMPLE:
+─────────────────────
+
+Before Revocation:
+   
+   Sensor_A ──────┐
+                  ├─── Gateway
+   Sensor_B ──────┘
+   
+   All green (active)
+
+After Revoking Sensor_A:
+
+   Sensor_A (RED)  [disconnected]
+   
+   Sensor_B ──────┐
+                  ├─── Gateway
+   Sensor_C ──────┘
+   
+   Sensor_A shows in crimson red, no connection line
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP-BY-STEP USER EXPERIENCE:
+═══════════════════════════════════════════════════════════════════════════════
+
+1. User sees device table with Sensor_A marked "Authorized"
+   
+2. User clicks "Revoke" button on Sensor_A
+
+3. Confirmation dialog: "Revoke certificate for Sensor_A?"
+
+4. User clicks "OK"
+
+5. Success alert: "Certificate revoked for Sensor_A"
+
+6. In Network Topology View:
+   - Sensor_A immediately changes to CRIMSON RED
+   - Connection line to gateway disappears
+   - Hover shows: "Status: REVOKED"
+   
+7. Device remains red in topology as audit trail
+
+8. On next dashboard refresh (F5):
+   - Sensor_A still shows in red
+   - Confirms status is persistent in database
+
+═══════════════════════════════════════════════════════════════════════════════
+TESTING THE FIX:
+═══════════════════════════════════════════════════════════════════════════════
+
+Quick Test:
+
+1. Open dashboard: http://localhost:5000/
+2. Look at network topology view
+3. Find an active device (green color)
+4. Click certificate management or "Revoke" button
+5. Confirm revocation
+6. RESULT: Device should turn CRIMSON RED in topology
+7. No connection line to gateway
+8. Tooltip shows "Status: REVOKED"
+
+That's it! The fix is working.
+
+═══════════════════════════════════════════════════════════════════════════════
+KEY FEATURES:
+═══════════════════════════════════════════════════════════════════════════════
+
+✅ Instant Visual Feedback
+   - Device changes color immediately
+   - No waiting for next poll
+
+✅ Clear Audit Trail
+   - Revoked devices remain visible
+   - Users can see which devices were revoked
+   - Professional appearance
+
+✅ Color-Coded Status
+   - Green = Active (normal operation)
+   - Red = Inactive (offline but may return)
+   - Crimson Red = Revoked (permanent, won't reconnect)
+
+✅ Backend Consistency
+   - Device status marked in database
+   - Tracking data cleared
+   - Invalid tokens prevent reconnection
+
+✅ Backward Compatible
+   - No API changes
+   - No database schema changes
+   - Works with existing code
+
+═══════════════════════════════════════════════════════════════════════════════
+FILES MODIFIED:
+═══════════════════════════════════════════════════════════════════════════════
+
+1. d:\Projects\Research\iot\IOT-project\controller.py
+   - Lines 2006-2039: Revoke endpoint with status update
+   - Lines 780-814: Topology generation with revoked devices
+
+2. d:\Projects\Research\iot\IOT-project\templates\dashboard.html
+   - Lines 1685-1710: Red color styling for revoked devices
+   - Lines 1968-1982: Status to group mapping
+   - Lines 2879-2908: Revoke button click handler
+
+3. d:\Projects\Research\iot\IOT-project\TOPOLOGY_SYNC_FIX.md
+   - Updated documentation with new approach
+
+═══════════════════════════════════════════════════════════════════════════════
+BENEFITS OVER PREVIOUS APPROACH:
+═══════════════════════════════════════════════════════════════════════════════
+
+OLD:     Device disappears completely ❌
+         - No audit trail
+         - Can't see what was revoked
+         - Confusing if device suddenly vanishes
+
+NEW:     Device appears in red ✅
+         - Audit trail visible
+         - Clear status indication
+         - Professional appearance
+         - Better user experience
+         - Complies with security best practices
+
+═══════════════════════════════════════════════════════════════════════════════
