@@ -3043,16 +3043,30 @@
                 .then(resp => resp.json())
                 .then(data => {
                     if (data.status === 'success') {
-                        alert('Device approved and onboarded successfully!');
+                        showAlert('Device approved and onboarded successfully!', 'success');
                         loadPendingDevices();
                         loadDeviceHistory();
+                        
+                        // Refresh the topology to show the newly approved device
+                        fetch('/get_topology_with_mac')
+                            .then(response => response.json())
+                            .then(topologyData => {
+                                updateTopology(topologyData);
+                                console.log(`Device ${deviceId} approved and added to topology`);
+                            })
+                            .catch(error => {
+                                console.error('Topology refresh failed:', error);
+                            });
+                        
+                        // Refresh all device data and counts
+                        updateData();
                     } else {
-                        alert('Error: ' + (data.message || 'Failed to approve device'));
+                        showAlert('Error: ' + (data.message || 'Failed to approve device'), 'error');
                     }
                 })
                 .catch(err => {
                     console.error('Error approving device:', err);
-                    alert('Error approving device');
+                    showAlert('Error approving device', 'error');
                 });
         }
 
