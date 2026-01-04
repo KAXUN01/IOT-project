@@ -785,7 +785,15 @@ def get_topology_with_mac():
         
         # Get device info from database if available
         device_info = devices_from_db.get(device_id, {})
-        device_status = device_info.get('status', 'active' if online else 'inactive')
+        # Set status based on online state - offline devices should show as inactive
+        # unless they are explicitly revoked
+        db_status = device_info.get('status', None)
+        if db_status == 'revoked':
+            device_status = 'revoked'
+        elif online:
+            device_status = db_status if db_status else 'active'
+        else:
+            device_status = 'inactive'
         
         # Get MAC address (from database, mac_addresses dict, or default)
         mac = (mac_addresses.get(device_id) or 
@@ -815,9 +823,10 @@ def get_topology_with_mac():
             "honeypot_redirected": is_honeypot_redirected
         })
         
-        # Show edge connection to gateway for active/authorized devices
-        # Skip edges for revoked devices (they show as disconnected)
-        if device_status != 'revoked':
+        # Show edge connection to gateway for devices that are:
+        # 1. Not revoked AND
+        # 2. Currently online (seen in last 10 seconds)
+        if device_status != 'revoked' and online:
             topology["edges"].append({
                 "from": device_id,
                 "to": "ESP32_Gateway"
