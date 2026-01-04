@@ -782,6 +782,11 @@ def get_topology_with_mac():
         device_info = devices_from_db.get(device_id, {})
         device_status = device_info.get('status', 'active' if online else 'inactive')
         
+        # Skip revoked devices - they should not appear in topology at all
+        if device_status == 'revoked':
+            app.logger.debug(f"Skipping revoked device {device_id} from topology")
+            continue
+        
         # Get MAC address (from database, mac_addresses dict, or default)
         mac = (mac_addresses.get(device_id) or 
                device_info.get('mac_address') or 
@@ -804,12 +809,10 @@ def get_topology_with_mac():
         })
         
         # Show edge connection to gateway for all authorized/active devices
-        # (not just online ones, so devices appear in topology immediately)
-        if device_status != 'revoked':
-            topology["edges"].append({
-                "from": device_id,
-                "to": "ESP32_Gateway"
-            })
+        topology["edges"].append({
+            "from": device_id,
+            "to": "ESP32_Gateway"
+        })
     
     return json.dumps(topology)
 

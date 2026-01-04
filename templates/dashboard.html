@@ -2878,12 +2878,30 @@
                     .then(data => {
                         if (data.success) {
                             showAlert(`Certificate revoked for ${deviceId}`, 'success');
+                            
+                            // Immediately remove device from network visualization
+                            if (network) {
+                                network.body.data.nodes.remove(deviceId);
+                                // Also remove any edges connected to this device
+                                const edgesToRemove = [];
+                                network.body.data.edges.get().forEach(edge => {
+                                    if (edge.from === deviceId || edge.to === deviceId) {
+                                        edgesToRemove.push(edge.id);
+                                    }
+                                });
+                                if (edgesToRemove.length > 0) {
+                                    network.body.data.edges.remove(edgesToRemove);
+                                }
+                            }
+                            
                             // Refresh the certificate list
                             updateCertificates();
-                            // Refresh the network topology to show device disconnected
+                            
+                            // Also refresh the topology to ensure consistency
                             fetch('/get_topology_with_mac')
                                 .then(response => response.json())
-                                .then(topologyData => updateTopology(topologyData));
+                                .then(topologyData => updateTopology(topologyData))
+                                .catch(error => console.debug('Topology refresh failed:', error));
                         } else {
                             showAlert(`Failed to revoke certificate: ${data.error}`, 'error');
                         }
