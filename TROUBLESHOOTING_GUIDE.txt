@@ -1,0 +1,356 @@
+═══════════════════════════════════════════════════════════════════════════════
+TROUBLESHOOTING GUIDE - REVOKED DEVICES IN RED NOT WORKING
+═══════════════════════════════════════════════════════════════════════════════
+
+If revoked devices are not appearing in red color in the network topology view,
+use this troubleshooting guide to diagnose and fix the issue.
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE 1: Device still appears GREEN after revoking
+═══════════════════════════════════════════════════════════════════════════════
+
+Possible Causes:
+  1. Revoke endpoint not being called properly
+  2. Device status not updating in database
+  3. Frontend not refreshing topology
+  4. Browser cache issue
+
+Solutions:
+
+A. Check if revoke endpoint is working:
+   ────────────────────────────────────
+   
+   1. Open browser Developer Tools (F12)
+   2. Go to Network tab
+   3. Click "Revoke" on a device
+   4. Look for POST request to /api/certificates/{deviceId}/revoke
+   5. Check response:
+      - Should see: {"success": true}
+      - If error appears, check backend logs
+   
+   If request doesn't appear:
+   └─ Frontend revoke button might not be wired correctly
+   └─ Check that revokeCertificate() function exists in dashboard.html
+
+B. Check database status:
+   ────────────────────────
+   
+   1. Access device database (identity.db)
+   2. Query: SELECT device_id, status FROM devices WHERE device_id='Sensor_A'
+   3. Check if status column shows 'revoked'
+   
+   If status is NOT 'revoked':
+   └─ Database update failed
+   └─ Check update_device_status() function in identity_manager
+   └─ Verify database has 'status' column
+   └─ Run: ALTER TABLE devices ADD COLUMN status TEXT; (if missing)
+
+C. Refresh browser cache:
+   ─────────────────────────
+   
+   1. Press Ctrl+Shift+Delete (or Cmd+Shift+Delete on Mac)
+   2. Clear browser cache and cookies
+   3. Close and reopen browser
+   4. Navigate back to dashboard
+   5. Try revoking again
+
+D. Check controller.py modifications:
+   ──────────────────────────────────
+   
+   Verify these lines exist in controller.py:
+   
+   Line 780-814: In /get_topology_with_mac endpoint
+      ├─ Check: if device_status != 'revoked':
+      └─ Should only add edges for non-revoked devices
+   
+   Line 2006-2039: In /api/certificates/<device_id>/revoke
+      ├─ Check: update_device_status(device_id, 'revoked')
+      └─ Should mark device as revoked in database
+
+E. Check dashboard.html modifications:
+   ────────────────────────────────────
+   
+   Verify these lines exist in dashboard.html:
+   
+   Line 1685-1710: Group styling
+      └─ Check: revoked group with crimson red (#dc143c)
+   
+   Line 1968-1982: updateTopology function
+      └─ Check: if (node.status === 'revoked')
+   
+   Line 2879-2908: revokeCertificate function
+      └─ Check: updateTopology(topologyData) is called
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE 2: Device disappears instead of turning red
+═══════════════════════════════════════════════════════════════════════════════
+
+This happens if old code was still active that removes nodes completely.
+
+Solution:
+
+1. Open templates/dashboard.html
+2. Search for: network.body.data.nodes.remove(deviceId);
+3. If found, DELETE these lines (they were from older implementation):
+   
+   ❌ OLD CODE TO REMOVE:
+      if (network) {
+          network.body.data.nodes.remove(deviceId);
+          const edgesToRemove = [];
+          network.body.data.edges.get().forEach(edge => {
+              if (edge.from === deviceId || edge.to === deviceId) {
+                  edgesToRemove.push(edge.id);
+              }
+          });
+          if (edgesToRemove.length > 0) {
+              network.body.data.edges.remove(edgesToRemove);
+          }
+      }
+   
+   ✅ REPLACE WITH:
+      // Device will be refreshed via updateTopology()
+      // No manual removal needed
+
+4. Save file and refresh browser
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE 3: Revoked device appears in wrong color
+═══════════════════════════════════════════════════════════════════════════════
+
+Symptoms:
+  - Device appears yellow instead of red
+  - Device appears gray/other color
+  - Device color doesn't match expected crimson red
+
+Causes:
+  1. CSS styling not loaded
+  2. Group mapping incorrect
+  3. Status field has wrong value
+
+Solutions:
+
+A. Verify CSS colors in dashboard.html (lines 1685-1710):
+   
+   ✅ CORRECT CSS:
+      revoked: {
+          color: {
+              border: '#8b0000',
+              background: '#dc143c',  ← This should be crimson red
+              highlight: {
+                  border: '#8b0000',
+                  background: '#ff4747'
+              },
+              hover: {
+                  border: '#8b0000',
+                  background: '#ff4747'
+              }
+          }
+      }
+   
+   If colors are different:
+   └─ Update them to match above
+
+B. Verify status mapping in updateTopology (lines 1968-1982):
+   
+   ✅ CORRECT LOGIC:
+      if (node.status === 'revoked') {
+          return {
+              ...node,
+              group: 'revoked',  ← Must be 'revoked' exactly
+              title: `...REVOKED...`
+          };
+      }
+   
+   Check:
+   ├─ node.status has correct value
+   └─ group is assigned 'revoked' (lowercase, exact spelling)
+
+C. Check database value:
+   
+   Query: SELECT device_id, status FROM devices WHERE device_id='Sensor_A'
+   
+   ✅ Correct: status = 'revoked'
+   ❌ Wrong: status = 'REVOKED' (case sensitive)
+   ❌ Wrong: status = 'revoked ' (extra spaces)
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE 4: Revoke button not responding
+═══════════════════════════════════════════════════════════════════════════════
+
+Symptoms:
+  - Click "Revoke" button, nothing happens
+  - No dialog appears
+  - No error in console
+
+Solutions:
+
+A. Check if revokeCertificate function is defined:
+   
+   1. Open browser Developer Tools (F12)
+   2. Go to Console tab
+   3. Type: typeof revokeCertificate
+   4. Should return: "function"
+   
+   If returns "undefined":
+   └─ Function not loaded
+   └─ Check dashboard.html has the function defined
+   └─ Verify file was saved correctly
+
+B. Check if button calls the function correctly:
+   
+   In dashboard.html, search for "revokeCertificate"
+   
+   ✅ Correct:
+      <button onclick="revokeCertificate('Sensor_A')">Revoke</button>
+   
+   ❌ Wrong:
+      <button>Revoke</button>  (no onclick)
+
+C. Check browser console for errors:
+   
+   1. Press F12 to open Developer Tools
+   2. Click Console tab
+   3. Try revoking a device
+   4. Look for any red error messages
+   5. If found, read error message carefully
+   
+   Common errors:
+   ├─ "fetch is not defined" → JavaScript issue
+   ├─ "404 Not Found" → API endpoint missing
+   ├─ "CORS error" → Server configuration issue
+   └─ "null is not an object" → Missing HTML element
+
+D. Verify API endpoint exists in controller.py:
+   
+   Search for: @app.route('/api/certificates/<device_id>/revoke'
+   
+   ✅ Should be present around line 1993
+   └─ If missing, add it from TOPOLOGY_SYNC_FIX.md
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE 5: Dashboard shows "Checking..." for device status
+═══════════════════════════════════════════════════════════════════════════════
+
+This is normal! The status is being fetched. Just wait a moment.
+
+If it stays "Checking..." forever:
+
+A. Check backend is running:
+   
+   1. Open terminal
+   2. Type: curl http://localhost:5000/
+   3. Should return HTML of dashboard
+   
+   If connection refused:
+   └─ Start controller: python controller.py
+
+B. Check /get_data endpoint:
+   
+   1. Open: http://localhost:5000/get_data in browser
+   2. Should return JSON with device data
+   
+   If returns error:
+   └─ Backend might be having issues
+   └─ Check controller.py logs
+
+═══════════════════════════════════════════════════════════════════════════════
+DEBUGGING CHECKLIST
+═══════════════════════════════════════════════════════════════════════════════
+
+Before reporting issues, check these items:
+
+Backend (controller.py):
+  ☐ File was modified and saved
+  ☐ Lines 2006-2039 have revoke endpoint
+  ☐ Lines 780-814 have topology filtering
+  ☐ Controller is running (python controller.py)
+  ☐ No syntax errors in file
+
+Frontend (dashboard.html):
+  ☐ File was modified and saved
+  ☐ Lines 1685-1710 have revoked group styling
+  ☐ Lines 1968-1982 have status checking
+  ☐ Lines 2879-2908 have revokeCertificate function
+  ☐ No JavaScript errors in browser console (F12)
+
+Database:
+  ☐ Device exists in database
+  ☐ Status column exists in devices table
+  ☐ Status is exactly 'revoked' (lowercase, no spaces)
+
+Browser:
+  ☐ Cached files cleared (Ctrl+Shift+Delete)
+  ☐ Page refreshed (F5 or Ctrl+R)
+  ☐ Developer console checked for errors (F12)
+  ☐ Network requests successful (Network tab, check for 200 status)
+
+═══════════════════════════════════════════════════════════════════════════════
+IF ALL ELSE FAILS
+═══════════════════════════════════════════════════════════════════════════════
+
+1. Verify code changes are in place:
+   
+   git status  (should show modified files)
+   
+   Modified files should be:
+   ├─ controller.py
+   ├─ templates/dashboard.html
+   └─ TOPOLOGY_SYNC_FIX.md
+
+2. Check git diff to see actual changes:
+   
+   git diff controller.py
+   git diff templates/dashboard.html
+   
+   Should show:
+   ├─ Addition of revoke endpoint
+   ├─ Addition of status checking
+   └─ Addition of red color styling
+
+3. Restart everything:
+   
+   1. Kill controller process (Ctrl+C)
+   2. Clear all browser caches (Ctrl+Shift+Delete)
+   3. Start controller again (python controller.py)
+   4. Open dashboard in fresh browser window
+   5. Try revoking device again
+
+4. Check logs:
+   
+   1. Look at controller.py output
+   2. Check for any error messages
+   3. Look for "Device revoked" message
+   4. Check browser console (F12) for JavaScript errors
+
+═══════════════════════════════════════════════════════════════════════════════
+GETTING HELP
+═══════════════════════════════════════════════════════════════════════════════
+
+When reporting an issue, include:
+
+1. What you did:
+   └─ "I clicked Revoke on Sensor_A"
+
+2. What you expected:
+   └─ "Device should turn red"
+
+3. What actually happened:
+   └─ "Device disappeared"
+
+4. Screenshots of:
+   ├─ Network topology view before revoke
+   ├─ Network topology view after revoke
+   └─ Browser developer console (F12)
+
+5. Files checked:
+   ├─ Lines in controller.py
+   ├─ Lines in dashboard.html
+   └─ Database status value
+
+6. Steps already tried:
+   ├─ Clearing cache
+   ├─ Restarting controller
+   ├─ Refreshing browser
+   └─ Other troubleshooting
+
+═══════════════════════════════════════════════════════════════════════════════

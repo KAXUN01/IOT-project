@@ -670,8 +670,13 @@ def get_data():
     current_time = time.time()
     data = {}
     for device in device_data:
-        packet_count = sum(device_data[device])
-        device_packet_counts = [t for t in packet_counts[device] if current_time - t <= 60]
+        try:
+            packet_count = sum(device_data[device])
+        except (TypeError, ValueError):
+            packet_count = 0
+        
+        # Get packet counts for rate limiting, handling devices that may have been deleted
+        device_packet_counts = [t for t in packet_counts.get(device, []) if current_time - t <= 60]
         rate_limit_status = f"{len(device_packet_counts)}/{RATE_LIMIT}"
         blocked_reason = "Maintenance window" if is_maintenance_window() else None
         
@@ -792,6 +797,11 @@ def get_topology_with_mac():
         
         # Add device node to topology
         # Revoked devices will still appear but be visually marked as revoked (red color)
+        try:
+            packet_count = sum(device_data.get(device_id, []) or [])
+        except (TypeError, ValueError):
+            packet_count = 0
+        
         topology["nodes"].append({
             "id": device_id,
             "label": device_id,
@@ -800,7 +810,7 @@ def get_topology_with_mac():
             "status": device_status,
             "type": "device",
             "last_seen": last_seen_time,
-            "packets": sum(device_data.get(device_id, [])),
+            "packets": packet_count,
             "onboarded": device_id in devices_from_db,
             "honeypot_redirected": is_honeypot_redirected
         })
