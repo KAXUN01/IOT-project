@@ -725,19 +725,21 @@ def update_auth():
     
     if action == 'authorize':
         # Re-initialize tracking data structures for the device
-        # This allows the device to start fresh and be tracked properly
-        if device_id not in last_seen:
-            last_seen[device_id] = 0  # Will be updated when device sends data
+        # 1. Update last_seen to NOW so topology connects immediately
+        last_seen[device_id] = time.time()
+        
+        # 2. Reset data and rate limits
         if device_id not in device_data:
             device_data[device_id] = []
-        if device_id not in packet_counts:
-            packet_counts[device_id] = []
+        # Always reset packet counts to clear rate limits
+        packet_counts[device_id] = []
         
-        # Generate a new token for the device so it can immediately work
-        # This eliminates the need to restart the simulator/device
+        # 3. Generating a fresh token (Kills old session state effectively)
+        # This allows the device to restart its session with a clean slate
         new_token = str(uuid.uuid4())
         device_tokens[device_id] = {"token": new_token, "last_activity": time.time()}
-        app.logger.info(f"Device {device_id} tracking data re-initialized and new token generated")
+        
+        app.logger.info(f"Device {device_id} re-authorized: Status=Active, Token=Refreshed, Tracking=Reset")
         
     elif action == 'revoke':
         # Clear all tracking data when revoking
