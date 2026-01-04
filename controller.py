@@ -700,6 +700,21 @@ def update_auth():
     device_id = request.form['device_id']
     action = request.form['action']
     authorized_devices[device_id] = (action == 'authorize')
+    
+    # Update database status when authorizing/revoking
+    if ONBOARDING_AVAILABLE and onboarding:
+        try:
+            if action == 'authorize':
+                # Restore device status to 'active' in database
+                onboarding.identity_db.update_device_status(device_id, 'active')
+                app.logger.info(f"Device {device_id} authorized and status restored to 'active'")
+            elif action == 'revoke':
+                # Set device status to 'revoked' in database
+                onboarding.identity_db.update_device_status(device_id, 'revoked')
+                app.logger.info(f"Device {device_id} revoked")
+        except Exception as e:
+            app.logger.error(f"Failed to update device status in database: {e}")
+    
     if action == 'revoke' and device_id in device_tokens:
         device_tokens.pop(device_id)
     return dashboard()
