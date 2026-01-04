@@ -110,8 +110,15 @@ class VirtualHost:
                 else:
                     print(f"❌ {self.device_id}: Packet rejected - {result.get('reason')}")
                     return False
+            elif response.status_code == 403:
+                # Token expired or invalid - Re-authenticate!
+                print(f"⚠️ {self.device_id}: Token invalid (403). Re-authenticating...")
+                if self.authenticate_with_controller():
+                    # Retry sending with new token
+                    return self.send_packet(data)
+                return False
             else:
-                print(f"❌ {self.device_id}: Send failed")
+                print(f"❌ {self.device_id}: Send failed (Status {response.status_code})")
                 return False
         except Exception as e:
             print(f"❌ {self.device_id}: Send error: {e}")
