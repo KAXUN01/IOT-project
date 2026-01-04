@@ -16,6 +16,8 @@ import random
 import threading
 import os
 import logging
+import subprocess
+import sys
 
 # Try to import DeviceOnboarding, but make it optional
 try:
@@ -753,6 +755,17 @@ def update_auth():
     
     if action == 'authorize':
         new_token = hard_reauthorize_device(device_id)
+        
+        # Automatically run mininet_topology.py
+        try:
+            curr_dir = os.path.dirname(os.path.abspath(__file__))
+            script_path = os.path.join(curr_dir, 'mininet_topology.py')
+            # Run in background
+            subprocess.Popen([sys.executable, script_path], cwd=curr_dir)
+            app.logger.info(f"🚀 Automatically started mininet_topology.py triggered by re-auth of {device_id}")
+        except Exception as e:
+            app.logger.error(f"Failed to start mininet_topology.py: {e}")
+
         return jsonify({
             "status": "authorized",
             "device_id": device_id,
