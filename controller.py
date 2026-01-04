@@ -732,7 +732,12 @@ def update_auth():
             device_data[device_id] = []
         if device_id not in packet_counts:
             packet_counts[device_id] = []
-        app.logger.info(f"Device {device_id} tracking data re-initialized")
+        
+        # Generate a new token for the device so it can immediately work
+        # This eliminates the need to restart the simulator/device
+        new_token = str(uuid.uuid4())
+        device_tokens[device_id] = {"token": new_token, "last_activity": time.time()}
+        app.logger.info(f"Device {device_id} tracking data re-initialized and new token generated")
         
     elif action == 'revoke':
         # Clear all tracking data when revoking
