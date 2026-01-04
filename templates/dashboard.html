@@ -299,6 +299,11 @@
             height: 20px;
         }
 
+        .btn-sm {
+            padding: 0.4rem 0.8rem;
+            font-size: 0.8rem;
+        }
+
         .alert {
             padding: 1rem;
             border-radius: 8px;
@@ -1979,7 +1984,7 @@
                         }
                     };
                 }
-                
+
                 // Check if device is redirected to honeypot
                 if (node.honeypot_redirected) {
                     return {
@@ -1997,7 +2002,7 @@
                         }
                     };
                 }
-                
+
                 // Regular device logic: green for connected/active devices, red for inactive
                 const isOnline = node.online === true || node.status === 'active';
                 const hasEdge = Array.isArray(data.edges) && data.edges.some(edge =>
@@ -2858,7 +2863,12 @@
                                     <td><span style="color: ${statusColor};">${cert.status || 'unknown'}</span></td>
                                     <td>${cert.valid_until || 'N/A'}</td>
                                     <td>
-                                        <button class="btn-small" onclick="revokeCertificate('${cert.device_id}')">Revoke</button>
+                                        <button class="button button-danger btn-sm" onclick="revokeCertificate('${cert.device_id}')">
+                                            <span class="button-icon" style="margin-right: 4px;">
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                                            </span>
+                                            Revoke
+                                        </button>
                                     </td>
                                 </tr>
                             `;
@@ -2878,10 +2888,10 @@
                     .then(data => {
                         if (data.success) {
                             showAlert(`Certificate revoked for ${deviceId}`, 'success');
-                            
+
                             // Refresh the certificate list
                             updateCertificates();
-                            
+
                             // Refresh the topology to show device in red (revoked status)
                             fetch('/get_topology_with_mac')
                                 .then(response => response.json())
@@ -3046,7 +3056,7 @@
                         showAlert('Device approved and onboarded successfully!', 'success');
                         loadPendingDevices();
                         loadDeviceHistory();
-                        
+
                         // Refresh the topology to show the newly approved device
                         fetch('/get_topology_with_mac')
                             .then(response => response.json())
@@ -3057,7 +3067,7 @@
                             .catch(error => {
                                 console.error('Topology refresh failed:', error);
                             });
-                        
+
                         // Refresh all device data and counts
                         updateData();
                     } else {
