@@ -703,55 +703,64 @@ def get_data():
         }
     return json.dumps(data)
 
+def hard_reauthorize_device(device_id):
+    """
+    Fully restore a revoked device so it works immediately
+    """
+    now = time.time()
+
+    # 1. Mark authorized in memory
+    authorized_devices[device_id] = True
+
+    # 2. Restore DB status
+    if ONBOARDING_AVAILABLE and onboarding:
+        try:
+            onboarding.identity_db.update_device_status(device_id, 'active')
+        except Exception as e:
+            app.logger.error(f"DB reauth failed for {device_id}: {e}")
+
+    # 3. Reset runtime state
+    device_tokens.pop(device_id, None)
+    packet_counts[device_id] = []
+    device_data[device_id] = []
+    last_seen[device_id] = now
+
+    # 4. Issue fresh token
+    new_token = str(uuid.uuid4())
+    device_tokens[device_id] = {
+        "token": new_token,
+        "last_activity": now
+    }
+
+    app.logger.info(f"🔥 Device {device_id} fully re-authorized with fresh session")
+    return new_token
+
 @app.route('/update', methods=['POST'])
 def update_auth():
     device_id = request.form['device_id']
     action = request.form['action']
-    authorized_devices[device_id] = (action == 'authorize')
-    
-    # Update database status when authorizing/revoking
-    if ONBOARDING_AVAILABLE and onboarding:
-        try:
-            if action == 'authorize':
-                # Restore device status to 'active' in database
-                onboarding.identity_db.update_device_status(device_id, 'active')
-                app.logger.info(f"Device {device_id} authorized and status restored to 'active'")
-            elif action == 'revoke':
-                # Set device status to 'revoked' in database
-                onboarding.identity_db.update_device_status(device_id, 'revoked')
-                app.logger.info(f"Device {device_id} revoked")
-        except Exception as e:
-            app.logger.error(f"Failed to update device status in database: {e}")
     
     if action == 'authorize':
-        # Re-initialize tracking data structures for the device
-        # 1. Update last_seen to NOW so topology connects immediately
-        last_seen[device_id] = time.time()
-        
-        # 2. Reset data and rate limits
-        if device_id not in device_data:
-            device_data[device_id] = []
-        # Always reset packet counts to clear rate limits
-        packet_counts[device_id] = []
-        
-        # 3. Generating a fresh token (Kills old session state effectively)
-        # This allows the device to restart its session with a clean slate
-        new_token = str(uuid.uuid4())
-        device_tokens[device_id] = {"token": new_token, "last_activity": time.time()}
-        
-        app.logger.info(f"Device {device_id} re-authorized: Status=Active, Token=Refreshed, Tracking=Reset")
-        
+        new_token = hard_reauthorize_device(device_id)
+        return jsonify({
+            "status": "authorized",
+            "device_id": device_id,
+            "token": new_token,
+            "message": "Device re-authorized and fully restarted"
+        })
+
     elif action == 'revoke':
-        # Clear all tracking data when revoking
-        if device_id in device_tokens:
-            device_tokens.pop(device_id)
-        if device_id in last_seen:
-            del last_seen[device_id]
-        if device_id in device_data:
-            del device_data[device_id]
-        if device_id in packet_counts:
-            del packet_counts[device_id]
-        app.logger.info(f"Device {device_id} tracking data cleared")
+        authorized_devices[device_id] = False
+
+        if ONBOARDING_AVAILABLE and onboarding:
+            onboarding.identity_db.update_device_status(device_id, 'revoked')
+
+        device_tokens.pop(device_id, None)
+        packet_counts.pop(device_id, None)
+        device_data.pop(device_id, None)
+        last_seen.pop(device_id, None)
+
+        app.logger.info(f"🛑 Device {device_id} hard-revoked")
     
     return dashboard()
 
